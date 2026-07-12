@@ -1,4 +1,4 @@
-# MODULE_NAME
+# tf-ntnx-objects
 
 ## Table of Contents
 
