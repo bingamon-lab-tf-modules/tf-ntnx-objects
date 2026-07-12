@@ -1,0 +1,60 @@
+# Cursor rules
+.cursorrules
+.cursor/
+
+# Local .terraform directories
+**/.terraform/*
+
+# .tfstate files
+*.tfstate
+*.tfstate.*
+
+# Crash log files
+crash.log
+crash.*.log
+
+# Exclude all .tfvars files, which are likely to contain sensitive data
+*.tfvars
+*.tfvars.json
+
+# Ignore override files as they are usually used for local development
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Ignore CLI configuration files
+.terraformrc
+terraform.rc
+
+# Ignore lock files for Terraform sub-modules
+.terraform.lock.hcl
+
+# Include lock files for Terraform root-modules
+#!.terraform.lock.hcl
+
+# IDE files
+.idea/
+.vscode/
+
+# Ignore .DS_Store files
+.DS_Store
+
+# Ignore reports directory
+reports/
+
+# Ignore trivy cache directory
+.trivycache/
+
+# Ignore kics cache directory
+.kicscache/
+
+# Devenv
+.devenv*
+devenv.local.nix
+
+# direnv
+.direnv
+
+# pre-commit
+.pre-commit-config.yaml

@@ -1,0 +1,62 @@
+---
+##################################################
+#
+# Name: dependabot.yml
+# Description: Dependabot configuration for GitHub native version
+# Reference: https://git.io/JJhjE
+#
+##################################################
+
+version: 2
+
+updates:
+  #########################
+  # GitHub Actions
+  #########################
+
+  - package-ecosystem: "github-actions"
+    directories:
+      - "/"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+      time: "00:00"
+      timezone: "Australia/Sydney"
+    assignees:
+      - "MAHDTech"
+    labels:
+      - "actions"
+      - "chore"
+      - "dependabot"
+      - "dependencies"
+    target-branch: "trunk"
+    commit-message:
+      prefix: "github-actions"
+    rebase-strategy: "auto"
+    open-pull-requests-limit: 5
+
+    #########################
+    # Terraform
+    #########################
+
+  - package-ecosystem: "terraform"
+    directories:
+      - "/module"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+      time: "00:00"
+      timezone: "Australia/Sydney"
+    assignees:
+      - "MAHDTech"
+    labels:
+      - "chore"
+      - "dependabot"
+      - "dependencies"
+      - "opentofu"
+      - "terraform"
+    target-branch: "trunk"
+    commit-message:
+      prefix: "terraform"
+    rebase-strategy: "auto"
+    open-pull-requests-limit: 5

@@ -1,0 +1,391 @@
+---
+##################################################
+# Name: opentofu-module.yaml
+# Description: Workflow for OpenTofu Modules
+##################################################
+
+name: OpenTofu Module
+
+# prettier-ignore
+on:  # yamllint disable-line rule:truthy
+  # Module Build/Test (manual)
+  workflow_dispatch:
+  # Module Build/Test (auto)
+  pull_request:
+    branches:
+      - main
+      - master
+      - trunk
+  # Module Publish (releases)
+  release:
+    types:
+      - prereleased
+      - published
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+  pull-requests: write
+  statuses: write
+
+env:
+  # GitHub
+  PROJECT: ${{ github.repository }}
+  BRANCH_NAME_CURRENT: ${{ github.head_ref || github.ref_name }}
+  BRANCH_NAME_DEFAULT: ${{ github.event.repository.default_branch }}
+
+  # Nix
+  NIXPKGS_ALLOW_UNFREE: 1
+
+  # OpenTofu Module
+  MODULE_HOME: module
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  ##################################################
+  # BTest the OpenTofu Module
+  ##################################################
+
+  test:
+    name: OpenTofu Module (Test)
+
+    runs-on: ${{ matrix.os }}
+
+    # Only run on pull request, workflow dispatch, or releases
+    if: |
+      github.event_name == 'pull_request' ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'release'
+
+    timeout-minutes: 60
+    continue-on-error: false
+
+    strategy:
+      fail-fast: true
+      matrix:
+        os:
+          - ubuntu-latest
+
+    steps:
+      - id: checkout_repository
+        name: Checkout repository
+        if: github.event_name != 'release'
+        uses: actions/checkout@v5
+        with:
+          lfs: false
+          submodules: recursive
+
+      - id: checkout_repository_tag
+        name: Checkout repository tag
+        if: github.event_name == 'release'
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          lfs: false
+          submodules: recursive
+
+      - id: install_nix
+        name: "Install Nix ❄️"
+        uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          enable_kvm: true
+
+      - id: cachix
+        name: "Enable Cachix ❄️"
+        uses: cachix/cachix-action@v16
+        if: vars.CACHIX_CACHE_NAME != ''
+        with:
+          name: ${{ vars.CACHIX_CACHE_NAME }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          useDaemon: true
+          skipPush: false
+
+      - id: devenv_install
+        name: Devenv install
+        run: |
+          nix profile install --accept-flake-config nixpkgs#devenv
+
+      - id: opentofu_init
+        name: OpenTofu Init
+        shell: devenv shell --quiet bash -- -e {0}
+        run: |
+          echo "🔧 Initializing OpenTofu..."
+          cd "${MODULE_HOME}"
+          if ! tofu init -backend=false;
+          then
+            echo "❌ OpenTofu initialization failed!"
+            exit 1
+          fi
+          echo "✅ OpenTofu initialization completed"
+
+      - id: opentofu_format
+        name: OpenTofu Format
+        shell: devenv shell --quiet bash -- -e {0}
+        run: |
+          echo "📝 Checking OpenTofu format..."
+          if ! tofu fmt -check -recursive "${MODULE_HOME}";
+          then
+            echo "❌ OpenTofu files are not properly formatted!"
+            echo "💡 Run: tofu fmt -recursive ${MODULE_HOME}"
+            exit 1
+          fi
+          echo "✅ OpenTofu format check passed"
+
+      - id: opentofu_docs_check
+        name: OpenTofu Documentation Check
+        shell: devenv shell --quiet bash -- -e {0}
+        run: |
+          echo "📚 Checking OpenTofu documentation..."
+          if command -v terraform-docs &> /dev/null;
+          then
+            # Check if README needs updating
+            if ! terraform-docs --output-check --config .terraform-docs.yml ${MODULE_HOME};
+            then
+              echo "❌ Module README.md is out of date!"
+              echo "💡 Run: tofu-docs ${MODULE_HOME} locally to update the README.md"
+              echo "Displaying diff..."
+              terraform-docs --output-check --config .terraform-docs.yml ${MODULE_HOME}
+              exit 1
+            fi
+            echo "✅ Documentation is up to date"
+            exit 0
+          else
+            echo "⚠️ terraform-docs not available, documentation check failed"
+            exit 1
+          fi
+
+      - id: opentofu_validate
+        name: OpenTofu Validate
+        shell: devenv shell --quiet bash -- -e {0}
+        run: |
+          echo "🔍 Validating OpenTofu configuration..."
+          cd "${MODULE_HOME}"
+          if ! tofu validate;
+          then
+            echo "❌ OpenTofu validation failed!"
+            exit 1
+          fi
+          echo "✅ OpenTofu validation passed"
+
+      - id: opentofu_security_scan
+        name: OpenTofu Security Scan
+        shell: devenv shell --quiet bash -- -e {0}
+        run: |
+          echo "🔒 Running security scan..."
+          if command -v trivy &> /dev/null;
+          then
+            if ! trivy fs --exit-code 1 "${MODULE_HOME}";
+            then
+              echo "❌ Security scan found issues!"
+              exit 1
+            fi
+            echo "✅ Security scan passed"
+          else
+            echo "⚠️ Trivy not available, security scan failed"
+            exit 1
+          fi
+
+      - id: opentofu_lint
+        name: OpenTofu Lint
+        shell: devenv shell --quiet bash -- -e {0}
+        run: |
+          echo "🧹 Running OpenTofu linting..."
+          if command -v tflint &> /dev/null;
+          then
+            cd "${MODULE_HOME}"
+            if ! tflint --format=compact;
+            then
+              echo "❌ OpenTofu linting failed!"
+              exit 1
+            fi
+            echo "✅ OpenTofu linting passed"
+          else
+            echo "⚠️ tflint not available, linting failed"
+            exit 1
+          fi
+
+      - id: opentofu_test
+        name: OpenTofu Test
+        shell: devenv shell --quiet bash -- -e {0}
+        run: |
+          echo "🧪 Running OpenTofu tests..."
+          cd "${MODULE_HOME}"
+          if ! tofu test -verbose;
+          then
+            echo "❌ OpenTofu tests failed!"
+            exit 1
+          fi
+          echo "✅ OpenTofu tests passed"
+
+      - id: opentofu_status
+        name: OpenTofu Status
+        if: always()
+        run: |
+          echo "=== OpenTofu Module Build Status ==="
+          echo "Init: ${{ steps.opentofu_init.outcome }}"
+          echo "Format: ${{ steps.opentofu_format.outcome }}"
+          echo "Validate: ${{ steps.opentofu_validate.outcome }}"
+          echo "Docs: ${{ steps.opentofu_docs_check.outcome }}"
+          echo "Security: ${{ steps.opentofu_security_scan.outcome }}"
+          echo "Lint: ${{ steps.opentofu_lint.outcome }}"
+          echo "Test: ${{ steps.opentofu_test.outcome }}"
+
+          if [[ \
+            "${{ steps.opentofu_init.outcome }}" == "success" && \
+            "${{ steps.opentofu_format.outcome }}" == "success" && \
+            "${{ steps.opentofu_docs_check.outcome }}" == "success" && \
+            "${{ steps.opentofu_validate.outcome }}" == "success" && \
+            "${{ steps.opentofu_security_scan.outcome }}" == "success" && \
+            "${{ steps.opentofu_lint.outcome }}" == "success" && \
+            "${{ steps.opentofu_test.outcome }}" == "success" \
+          ]]; \
+          then
+            echo "STATUS=success" >> "$GITHUB_OUTPUT"
+            echo "✅ All OpenTofu checks passed!"
+          else
+            echo "STATUS=failure" >> "$GITHUB_OUTPUT"
+            echo "❌ Some OpenTofu checks failed!"
+          fi
+
+    outputs:
+      status: ${{ steps.opentofu_status.outputs.STATUS }}
+
+  ##################################################
+  # Publish the OpenTofu Module
+  ##################################################
+
+  publish:
+    name: OpenTofu Module (Publish)
+
+    runs-on: ${{ matrix.os }}
+
+    needs: test
+
+    # Only run on releases and if build was successful
+    if: |
+      github.event_name == 'release' &&
+      needs.test.outputs.status == 'success'
+
+    timeout-minutes: 30
+    continue-on-error: false
+
+    strategy:
+      fail-fast: true
+      matrix:
+        os:
+          - ubuntu-latest
+
+    steps:
+      - id: checkout_repository_tag
+        name: Checkout repository tag
+        if: github.event_name == 'release'
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          lfs: false
+          submodules: recursive
+
+      - id: install_nix
+        name: "Install Nix ❄️"
+        uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          enable_kvm: true
+
+      - id: cachix
+        name: "Enable Cachix ❄️"
+        uses: cachix/cachix-action@v16
+        if: vars.CACHIX_CACHE_NAME != ''
+        with:
+          name: ${{ vars.CACHIX_CACHE_NAME }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          useDaemon: true
+          skipPush: false
+
+      - id: devenv_install
+        name: Devenv install
+        run: |
+          nix profile install --accept-flake-config nixpkgs#devenv
+
+      - id: extract_version
+        name: Extract version from release
+        run: |
+          VERSION=${{ github.event.release.tag_name }}
+          VERSION_STRIPPED=${VERSION#v}
+          echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "VERSION_STRIPPED=${VERSION_STRIPPED}" >> "$GITHUB_OUTPUT"
+          echo "📦 Publishing module version: ${VERSION_STRIPPED}"
+          echo "🏷️  Release name: ${{ github.event.release.name }}"
+          echo "🔗 Release URL: ${{ github.event.release.html_url }}"
+
+      - id: create_package
+        name: Create module package
+        shell: devenv shell --quiet bash -- -e {0}
+        run: |
+          echo "📦 Creating module package..."
+
+          # Create a clean package of the module
+          PACKAGE_NAME="${{ env.PROJECT }}-${{ steps.extract_version.outputs.VERSION_STRIPPED }}"
+
+          # Copy module files
+          mkdir -p "/tmp/${PACKAGE_NAME}"
+          cp -r "${MODULE_HOME}"/* "/tmp/${PACKAGE_NAME}/"
+
+          # Create tarball
+          cd /tmp
+          tar -czf "${PACKAGE_NAME}.tar.gz" "${PACKAGE_NAME}"
+
+          echo "PACKAGE_PATH=/tmp/${PACKAGE_NAME}.tar.gz" >> "$GITHUB_OUTPUT"
+          echo "PACKAGE_NAME=${PACKAGE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "✅ Package created: ${PACKAGE_NAME}.tar.gz"
+          ls -la /tmp/${PACKAGE_NAME}
+
+      - id: publish_artifactory
+        name: Publish to Artifactory
+        if: vars.ARTIFACTORY_URL != '' && steps.create_package.outcome == 'success'
+        shell: devenv shell --quiet bash -- -e {0}
+        env:
+          ARTIFACTORY_URL: ${{ vars.ARTIFACTORY_URL }}
+          ARTIFACTORY_TOKEN: ${{ secrets.ARTIFACTORY_TOKEN }}
+        run: |
+          echo "🚀 Publishing to Artifactory..."
+          echo "URL: ${ARTIFACTORY_URL}"
+
+          PACKAGE_PATH="${{ steps.create_package.outputs.PACKAGE_PATH }}"
+          PACKAGE_NAME="${{ steps.create_package.outputs.PACKAGE_NAME }}"
+
+          if [[ "${ARTIFACTORY_TOKEN:-EMPTY}" == "EMPTY" ]];
+          then
+            echo "❌ ARTIFACTORY_TOKEN secret not configured!"
+            exit 1
+          fi
+
+          # Upload to Artifactory
+          curl  --fail --header "X-JFrog-Art-Api:${ARTIFACTORY_TOKEN}" \
+          --upload-file "${PACKAGE_PATH}" \
+          "${ARTIFACTORY_URL}/terraform-modules/${PACKAGE_NAME}.tar.gz" || {
+            echo "❌ Failed to upload to Artifactory!"
+            exit 1
+          }
+
+          echo "✅ Successfully published to Artifactory"
+
+      - id: publish_status
+        name: Publish Status
+        if: always()
+        run: |
+          if [[ "${{ steps.publish_artifactory.outcome }}" == "success" ]]; then
+            echo "✅ Module published successfully!"
+            echo "📦 Version: ${{ steps.extract_version.outputs.VERSION_STRIPPED }}"
+          else
+            echo "❌ Module publishing failed!"
+            exit 1
+          fi
