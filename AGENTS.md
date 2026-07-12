@@ -17,7 +17,6 @@ You will use `tofu` in place of all Terraform commands unless otherwise instruct
 ## Terraform Best Practices
 
 - Use remote backends (e.g., S3, Azure Blob, GCS) for state management.
-- Use Nutanix NDB for state management with locking if available in the environment.
 - Enable state locking and use encryption for security.
 - Utilize workspaces for environment separation (e.g., dev, staging, prod).
 - Organize resources by service or application domain (e.g., networking, compute).
