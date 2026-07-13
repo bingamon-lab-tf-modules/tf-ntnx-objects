@@ -69,7 +69,6 @@ in
   env = {
     PROJECT = config.name;
   };
-
   cachix = {
     enable = true;
     pull = [
