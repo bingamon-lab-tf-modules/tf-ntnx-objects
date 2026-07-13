@@ -15,9 +15,6 @@ on:  # yamllint disable-line rule:truthy
       - master
       - trunk
       - candidate # Release Candidates
-    paths:
-      - "module/*" # Only run when the module is updated
-      - "scripts/*" # Only run when the scripts are updated
   # Release (Push)
   push:
     branches:
@@ -25,9 +22,6 @@ on:  # yamllint disable-line rule:truthy
       - master
       - trunk
       - candidate # Release Candidates
-    paths:
-      - "module/*" # Only run when the module is updated
-      - "scripts/*" # Only run when the scripts are updated
   # Manual Trigger
   workflow_dispatch:
     inputs:
