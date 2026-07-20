@@ -11,7 +11,7 @@ A description of the module goes here.
 
 | Name | Version |
 |------|---------|
-| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.9.0 |
+| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.10.0 |
 | <a name="requirement_local"></a> [local](#requirement\_local) | >= 2.4.0 |
 | <a name="requirement_nutanix"></a> [nutanix](#requirement\_nutanix) | >= 2.4.2 |
 
