@@ -77,7 +77,7 @@ jobs:
       - id: checkout_repository
         name: Checkout repository
         if: github.event_name != 'release'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           lfs: false
           submodules: recursive
@@ -85,7 +85,7 @@ jobs:
       - id: checkout_repository_tag
         name: Checkout repository tag
         if: github.event_name == 'release'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.release.tag_name }}
           lfs: false
@@ -287,7 +287,7 @@ jobs:
       - id: checkout_repository_tag
         name: Checkout repository tag
         if: github.event_name == 'release'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.release.tag_name }}
           lfs: false
