@@ -81,6 +81,17 @@ function check_module_folder() {
 	return 0
 }
 
+# Check for legacy (non-_v2) nutanix resources and data sources.
+function check_legacy_resources() {
+	./scripts/check-legacy-resources.sh || {
+		error "Legacy nutanix resources or data sources detected."
+		return 1
+	}
+
+	success "No legacy nutanix resources or data sources found."
+	return 0
+}
+
 # Format the Terraform code and stage any changes.
 function format_terraform_code() {
 
@@ -245,6 +256,12 @@ check_dependencies || {
 
 check_module_folder || {
 	error "Failed to check the module folder."
+	exit 1
+}
+
+# Check for legacy nutanix resources and data sources.
+check_legacy_resources || {
+	error "Failed to check for legacy nutanix resources."
 	exit 1
 }
 
