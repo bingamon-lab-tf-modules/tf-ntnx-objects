@@ -103,7 +103,7 @@ jobs:
 
       - id: trivy_filesystem
         name: Trivy filesystem scan (SARIF)
-        shell: devenv shell --quiet bash -- -e {0}
+        shell: devenv --no-tui shell --quiet bash -- -e {0}
         run: >
           trivy
           filesystem
@@ -122,7 +122,7 @@ jobs:
       - id: trivy_status
         name: Trivy (status)
         if: always()
-        shell: devenv shell --quiet bash -- -e {0}
+        shell: devenv --no-tui shell --quiet bash -- -e {0}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

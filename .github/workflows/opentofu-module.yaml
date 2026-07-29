@@ -115,7 +115,7 @@ jobs:
 
       - id: opentofu_init
         name: OpenTofu Init
-        shell: devenv shell --quiet bash -- -e {0}
+        shell: devenv --no-tui shell --quiet bash -- -e {0}
         run: |
           echo "🔧 Initializing OpenTofu..."
           cd "${MODULE_HOME}"
@@ -128,7 +128,7 @@ jobs:
 
       - id: opentofu_format
         name: OpenTofu Format
-        shell: devenv shell --quiet bash -- -e {0}
+        shell: devenv --no-tui shell --quiet bash -- -e {0}
         run: |
           echo "📝 Checking OpenTofu format..."
           if ! tofu fmt -check -recursive "${MODULE_HOME}";
@@ -141,7 +141,7 @@ jobs:
 
       - id: opentofu_docs_check
         name: OpenTofu Documentation Check
-        shell: devenv shell --quiet bash -- -e {0}
+        shell: devenv --no-tui shell --quiet bash -- -e {0}
         run: |
           echo "📚 Checking OpenTofu documentation..."
           if command -v terraform-docs &> /dev/null;
@@ -164,7 +164,7 @@ jobs:
 
       - id: opentofu_legacy_check
         name: OpenTofu Legacy Resource Sweep
-        shell: devenv shell --quiet bash -- -e {0}
+        shell: devenv --no-tui shell --quiet bash -- -e {0}
         run: |
           echo "🚫 Checking for legacy (non-_v2) nutanix resources..."
           if ! ./scripts/check-legacy-resources.sh;
@@ -176,7 +176,7 @@ jobs:
 
       - id: opentofu_validate
         name: OpenTofu Validate
-        shell: devenv shell --quiet bash -- -e {0}
+        shell: devenv --no-tui shell --quiet bash -- -e {0}
         run: |
           echo "🔍 Validating OpenTofu configuration..."
           cd "${MODULE_HOME}"
@@ -189,7 +189,7 @@ jobs:
 
       - id: opentofu_security_scan
         name: OpenTofu Security Scan
-        shell: devenv shell --quiet bash -- -e {0}
+        shell: devenv --no-tui shell --quiet bash -- -e {0}
         run: |
           echo "🔒 Running security scan..."
           if command -v trivy &> /dev/null;
@@ -207,7 +207,7 @@ jobs:
 
       - id: opentofu_lint
         name: OpenTofu Lint
-        shell: devenv shell --quiet bash -- -e {0}
+        shell: devenv --no-tui shell --quiet bash -- -e {0}
         run: |
           echo "🧹 Running OpenTofu linting..."
           if command -v tflint &> /dev/null;
@@ -231,7 +231,7 @@ jobs:
 
       - id: opentofu_test
         name: OpenTofu Test
-        shell: devenv shell --quiet bash -- -e {0}
+        shell: devenv --no-tui shell --quiet bash -- -e {0}
         run: |
           echo "🧪 Running OpenTofu tests..."
           cd "${MODULE_HOME}"
@@ -345,7 +345,7 @@ jobs:
 
       - id: create_package
         name: Create module package
-        shell: devenv shell --quiet bash -- -e {0}
+        shell: devenv --no-tui shell --quiet bash -- -e {0}
         run: |
           echo "📦 Creating module package..."
 
@@ -368,7 +368,7 @@ jobs:
       - id: publish_artifactory
         name: Publish to Artifactory
         if: vars.ARTIFACTORY_URL != '' && steps.create_package.outcome == 'success'
-        shell: devenv shell --quiet bash -- -e {0}
+        shell: devenv --no-tui shell --quiet bash -- -e {0}
         env:
           ARTIFACTORY_URL: ${{ vars.ARTIFACTORY_URL }}
           ARTIFACTORY_TOKEN: ${{ secrets.ARTIFACTORY_TOKEN }}
