@@ -93,18 +93,18 @@ jobs:
 
       - id: prek_run
         name: Run Pre-commit Hooks (all files)
-        shell: devenv shell --quiet bash -- -e {0}
+        shell: devenv --no-tui shell --quiet bash -- -e {0}
         run: prek run --all-files --show-diff-on-failure
 
       - id: devenv_test
         name: Devenv test
         run: |
-          devenv test
+          devenv --no-tui test
 
       - id: devenv_status
         name: Devenv status
         if: always()
-        shell: devenv shell --quiet bash -- -e {0}
+        shell: devenv --no-tui shell --quiet bash -- -e {0}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

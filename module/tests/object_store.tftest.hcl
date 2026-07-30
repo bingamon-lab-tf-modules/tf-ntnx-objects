@@ -141,6 +141,91 @@ run "invalid_empty_name" {
   expect_failures = [var.object_stores]
 }
 
+# Test 3a: A 17-character name is rejected. The product caps store names at 16,
+# and any scheme encoding environment plus role will breach it.
+run "invalid_name_too_long" {
+  command = plan
+
+  variables {
+    object_stores = {
+      bad = {
+        name           = "seventeen-chars-x" # 17
+        cluster_ext_id = "11111111-1111-1111-1111-111111111111"
+      }
+    }
+  }
+
+  expect_failures = [var.object_stores]
+}
+
+# Test 3b: Exactly 16 characters is accepted — the boundary is inclusive.
+run "valid_name_at_limit" {
+  command = plan
+
+  variables {
+    object_stores = {
+      edge = {
+        name           = "sixteen-chars-ok" # 16
+        cluster_ext_id = "11111111-1111-1111-1111-111111111111"
+      }
+    }
+  }
+
+  assert {
+    condition     = output.objects_summary.object_store_count == 1
+    error_message = "A 16-character name is valid and must plan"
+  }
+}
+
+# Test 3c: An underscore is rejected. Reusing a snake_case map key as the store
+# name is the obvious mistake, and the vendor allows only hyphens.
+run "invalid_name_underscore" {
+  command = plan
+
+  variables {
+    object_stores = {
+      bad = {
+        name           = "lab_objects"
+        cluster_ext_id = "11111111-1111-1111-1111-111111111111"
+      }
+    }
+  }
+
+  expect_failures = [var.object_stores]
+}
+
+# Test 3d: A name starting with a digit is rejected — must begin with a letter.
+run "invalid_name_leading_digit" {
+  command = plan
+
+  variables {
+    object_stores = {
+      bad = {
+        name           = "1objects"
+        cluster_ext_id = "11111111-1111-1111-1111-111111111111"
+      }
+    }
+  }
+
+  expect_failures = [var.object_stores]
+}
+
+# Test 3e: A trailing hyphen is rejected — must end with a letter or number.
+run "invalid_name_trailing_hyphen" {
+  command = plan
+
+  variables {
+    object_stores = {
+      bad = {
+        name           = "objects-"
+        cluster_ext_id = "11111111-1111-1111-1111-111111111111"
+      }
+    }
+  }
+
+  expect_failures = [var.object_stores]
+}
+
 # Test 4: Setting both 'cluster' and 'cluster_ext_id' is rejected.
 run "cluster_and_ext_id_conflict" {
   command = plan
