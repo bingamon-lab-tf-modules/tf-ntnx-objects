@@ -23,8 +23,21 @@ variable "object_stores" {
     domain             = optional(string, null) # DNS (sub)domain, e.g. "objects-0.pc.example.com".
     region             = optional(string, null) # Deployment region.
     num_worker_nodes   = optional(number, null) # Worker VM count (each needs 10 vCPU / 32 GiB).
-    total_capacity_gib = optional(number, null) # Total capacity in GiB.
-    state              = optional(string, null) # e.g. "UNDEPLOYED_OBJECT_STORE" for a draft.
+
+    # ⚠️  UNIT UNCONFIRMED — do not assume GiB despite the name.
+    #
+    # The provider schema, the provider docs and the v4 API model all say "Size of
+    # the Object store in GiB". But Nutanix's own example AND the provider's
+    # acceptance tests use `20 * pow(1024, 3)` = 21,474,836,480 for a ONE-worker
+    # test store. That is 20 GiB expressed in BYTES; read literally as GiB it would
+    # be 20 EiB. One of the name, the docs or the examples is wrong.
+    #
+    # Getting this wrong is a factor of 2^30, and the store resource has no working
+    # update — so a mis-sized store must be destroyed and recreated. Confirm against
+    # a real deployment before writing a capacity into environment config.
+    total_capacity_gib = optional(number, null)
+
+    state = optional(string, null) # e.g. "UNDEPLOYED_OBJECT_STORE" for a draft.
 
     # Networking. References are subnet UUIDs (AHV) or IPAM names (ESXi).
     public_network_reference  = optional(string, null)
@@ -75,6 +88,27 @@ variable "object_stores" {
   validation {
     condition     = alltrue([for k, s in var.object_stores : s.name != null && trimspace(s.name) != ""])
     error_message = "Each object_stores entry must set a non-empty 'name'."
+  }
+
+  # Object store names are capped at 16 characters by the product. Provider 2.4.2
+  # does enforce it (issue #1093, "gives no Terraform error on long name") but with
+  # a bare length message, so fail here with the reason instead. Worth knowing up
+  # front: any scheme encoding environment plus role will not fit in 16 characters.
+  validation {
+    condition     = alltrue([for k, s in var.object_stores : s.name == null || try(length(s.name) <= 16, false)])
+    error_message = "Each object_stores 'name' must be at most 16 characters — the Nutanix Objects limit is min 1, max 16."
+  }
+
+  # Vendor rule: "Begin with a letter, and end with a letter or number. Can contain
+  # alphanumeric or hyphen characters. Not contain any special character other than
+  # a hyphen." Underscores and dots are rejected, which catches the common instinct
+  # to reuse a snake_case map key or a DNS-style name as the store name.
+  validation {
+    condition = alltrue([
+      for k, s in var.object_stores :
+      s.name == null || can(regex("^[A-Za-z]([A-Za-z0-9-]*[A-Za-z0-9])?$", s.name))
+    ])
+    error_message = "Each object_stores 'name' must begin with a letter, end with a letter or number, and contain only letters, digits and hyphens."
   }
 
   # Exactly one of 'cluster' or 'cluster_ext_id' must identify the cluster.
