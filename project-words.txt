@@ -92,3 +92,6 @@ waderyan
 wakatime
 yzhang
 prek
+Velero
+COSI
+footgun

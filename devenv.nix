@@ -201,7 +201,7 @@ in
         enable = true;
         name = "tofu-validate-module";
         entry = "tofu-validate-module";
-        files = "^module/.*\\.*$";
+        files = "^modules?/.*$";
         pass_filenames = false;
       };
       tflint.enable = true;
@@ -271,17 +271,30 @@ in
       package = pkgs.bash;
       description = "Validate Terraform Module";
       exec = ''
-        MODULE_HOME="$(pwd)/module"
-        if [ ! -d "''${MODULE_HOME}" ];
+        REPO_ROOT="$(pwd)"
+        if [ ! -d "''${REPO_ROOT}/module" ];
         then
-          echo "Directory ''${MODULE_HOME} does not exist. Please run this script from the root of the repository."
+          echo "Directory ''${REPO_ROOT}/module does not exist. Please run this script from the root of the repository."
           exit 1
         fi
-        echo "Checking Terraform Module for ''${MODULE_HOME}"
-        tofu-format "''${MODULE_HOME}" || exit 1
-        tofu-init "''${MODULE_HOME}" || exit 1
-        tofu-validate "''${MODULE_HOME}" || exit 1
-        tofu-docs "''${MODULE_HOME}" || exit 1
+        # Every entry point in the repo: the nutanix one at module/, plus each
+        # additional provider-specific one under modules/<name>/.
+        MODULE_HOMES="''${REPO_ROOT}/module"
+        for CANDIDATE in "''${REPO_ROOT}"/modules/*;
+        do
+          if [ -d "''${CANDIDATE}" ];
+          then
+            MODULE_HOMES="''${MODULE_HOMES} ''${CANDIDATE}"
+          fi
+        done
+        for MODULE_HOME in ''${MODULE_HOMES};
+        do
+          echo "Checking Terraform Module for ''${MODULE_HOME}"
+          tofu-format "''${MODULE_HOME}" || exit 1
+          tofu-init "''${MODULE_HOME}" || exit 1
+          tofu-validate "''${MODULE_HOME}" || exit 1
+          tofu-docs "''${MODULE_HOME}" || exit 1
+        done
       '';
     };
 

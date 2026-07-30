@@ -1,2 +1,6 @@
 .devcontainer.json
 .devcontainer/devcontainer.json
+
+# terraform-docs generated; regenerating it would fight prettier's formatting.
+module/README.md
+modules/*/README.md
