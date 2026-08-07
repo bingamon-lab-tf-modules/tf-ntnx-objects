@@ -2,14 +2,25 @@
 
 ## Overview
 
-A Terraform/OpenTofu module for managing **Nutanix Objects** (NUS) object stores
-on Prism Central. It wraps:
+Terraform/OpenTofu modules for managing **Nutanix Objects** (NUS) end to end — the
+object store on Prism Central, and the buckets on its S3 endpoint.
 
-- `nutanix_object_store_v2` — deploy/manage an object store (worker VMs + networking).
-- `nutanix_object_store_certificate_v2` — attach a TLS certificate to an object store.
+There are **two entry points**, not one module behind a flag. Each declares exactly
+one provider, so neither consumer is forced to hold a credential it has no business
+holding: the deploy-only consumer has no S3 access key, and the bucket consumer has
+no reason to hold Prism Central credentials.
 
-The [Terraform Module](module/README.md) documentation contains the available
-variables and outputs.
+| Entry point                                     | Provider           | Manages                                                                                               |
+| ----------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------- |
+| [`module/`](module/README.md)                   | `nutanix` **only** | `nutanix_object_store_v2`, `nutanix_object_store_certificate_v2` — the store and its TLS certificate. |
+| [`modules/buckets/`](modules/buckets/README.md) | `aws` **only**     | Buckets, versioning, lifecycle rules, policies and S3 Object Lock (WORM) over the store's S3 API.     |
+
+The boundary between them is **lifetime, not location**: buckets that must outlive
+the cluster (OpenTofu state, the Velero/DR target, the Harbor registry) are Terraform
+here, marked `durable: true`; buckets whose lifetime _is_ a cluster's belong to COSI
+in-cluster. Each entry point's README documents its own variables, outputs and traps.
+[`examples/example.tf`](examples/example.tf) wires both together, with the `aws`
+provider `for_each`'d over the object stores.
 
 ## Capability boundary
 
@@ -21,7 +32,7 @@ management at all" — be precise about what is and is not available:
 | ------------------------------------------ | ------------------------------------------------------------------------ |
 | Object store + TLS certificate             | **Yes** — this module                                                    |
 | S3 access keys (access key + secret pair)  | **Yes**, but elsewhere — `nutanix_user_key_v2`, wrapped by `tf-ntnx-iam` |
-| Buckets, bucket policies, lifecycle, WORM  | **No Nutanix resource exists.** Use the S3 API                           |
+| Buckets, bucket policies, lifecycle, WORM  | **No Nutanix resource exists.** Use the S3 API — `modules/buckets/`      |
 | Federated namespace, streaming replication | **No** — UI only                                                         |
 
 **Access keys are not missing.** Provider 2.4.2 ships `nutanix_user_key_v2` with
@@ -34,11 +45,19 @@ Note this means an S3 secret lands in OpenTofu state whenever a key is minted by
 Terraform. Sensitive-in-state is still in state; generating keys in the Objects UI
 and storing them under SOPS avoids it.
 
-**Buckets genuinely have no resource.** The vendor's own example says so — "we are
-not supporting delete bucket API in terraform" — and Objects offers no non-S3
-bucket API: v5.3 states buckets are managed "by using Prism Central or the
-S3-compatible REST APIs". The S3 plane therefore belongs to an S3 client (the
-`hashicorp/aws` provider with an endpoint override, or an SDK), not here.
+**Buckets genuinely have no Nutanix resource.** The vendor's own example says so —
+"we are not supporting delete bucket API in terraform" — and Objects offers no
+non-S3 bucket API: v5.3 states buckets are managed "by using Prism Central or the
+S3-compatible REST APIs". The S3 plane therefore belongs to an S3 client, which is
+what [`modules/buckets/`](modules/buckets/README.md) is: `hashicorp/aws` with an
+endpoint override, path-style addressing, and single-purpose `aws_s3_*` resources
+rather than the aggregate `aws_s3_bucket`.
+
+**WORM _is_ expressible**, contrary to a first reading of the vendor docs. "You
+cannot enable the WORM policy while creating a bucket" describes the Objects **UI**
+workflow; the S3 Object Lock API is separately supported. Objects implements
+COMPLIANCE mode only, requires versioning, and requires Object Lock be enabled at
+bucket creation — all three enforced at plan time by `modules/buckets/`.
 
 ## Operational notes
 
