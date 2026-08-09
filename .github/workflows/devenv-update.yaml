@@ -104,7 +104,9 @@ jobs:
           body: "This PR updates the devenv input dependencies"
           branch: "update-devenv-lock"
           base: ${{ env.BRANCH_NAME_DEFAULT }}
-          labels: "dependencies"
+          labels: |
+            dependencies
+            semver none
           assignees: "MAHDTech"
           reviewers: "MAHDTech"
           draft: false

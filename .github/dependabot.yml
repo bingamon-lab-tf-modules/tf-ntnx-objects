@@ -29,6 +29,7 @@ updates:
       - "chore"
       - "dependabot"
       - "dependencies"
+      - "semver none"
     target-branch: "trunk"
     commit-message:
       prefix: "github-actions"
@@ -54,6 +55,7 @@ updates:
       - "dependabot"
       - "dependencies"
       - "opentofu"
+      - "semver none"
       - "terraform"
     target-branch: "trunk"
     commit-message:
