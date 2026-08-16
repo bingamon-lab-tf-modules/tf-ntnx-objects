@@ -27,11 +27,9 @@ override.tf.json
 .terraformrc
 terraform.rc
 
-# Ignore lock files for Terraform sub-modules
-.terraform.lock.hcl
-
-# Include lock files for Terraform root-modules
-#!.terraform.lock.hcl
+# Commit provider lock files: consumers ignore them, but they record the
+# exact provider versions this repo's tests were validated against.
+!.terraform.lock.hcl
 
 # IDE files
 .idea/
