@@ -20,7 +20,7 @@ so resizing means destroy and recreate.
 ## Requirements
 
 | Name | Version |
-|------|---------|
+| ---- | ------- |
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.10.0 |
 | <a name="requirement_local"></a> [local](#requirement\_local) | >= 2.4.0 |
 | <a name="requirement_nutanix"></a> [nutanix](#requirement\_nutanix) | >= 2.4.2 |
@@ -28,7 +28,7 @@ so resizing means destroy and recreate.
 ## Providers
 
 | Name | Version |
-|------|---------|
+| ---- | ------- |
 | <a name="provider_local"></a> [local](#provider\_local) | 2.9.0 |
 | <a name="provider_nutanix"></a> [nutanix](#provider\_nutanix) | 2.4.2 |
 
@@ -39,7 +39,7 @@ No modules.
 ## Resources
 
 | Name | Type |
-|------|------|
+| ---- | ---- |
 | [local_sensitive_file.certificate_bundle](https://registry.terraform.io/providers/hashicorp/local/latest/docs/resources/sensitive_file) | resource |
 | [nutanix_object_store_certificate_v2.certificate](https://registry.terraform.io/providers/nutanix/nutanix/latest/docs/resources/object_store_certificate_v2) | resource |
 | [nutanix_object_store_v2.object_store](https://registry.terraform.io/providers/nutanix/nutanix/latest/docs/resources/object_store_v2) | resource |
@@ -50,7 +50,7 @@ No modules.
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
+| ---- | ----------- | ---- | ------- | :------: |
 | <a name="input_certificate_output_dir"></a> [certificate\_output\_dir](#input\_certificate\_output\_dir) | Directory where inline certificate JSON bundles are written. Defaults to '<root>/.object\_store\_certificates'. | `string` | `null` | no |
 | <a name="input_lookup_existing_object_stores"></a> [lookup\_existing\_object\_stores](#input\_lookup\_existing\_object\_stores) | When true, query all existing object stores (nutanix\_object\_stores\_v2) and expose them via the 'existing\_object\_stores' output. | `bool` | `false` | no |
 | <a name="input_object_store_certificate_bundles"></a> [object\_store\_certificate\_bundles](#input\_object\_store\_certificate\_bundles) | SENSITIVE map (cert key => raw JSON certificate bundle) rendered to disk for certificates that do not supply an existing 'path'. The only supported channel for private key material. | `map(string)` | `{}` | no |
@@ -62,7 +62,7 @@ No modules.
 ## Outputs
 
 | Name | Description |
-|------|-------------|
+| ---- | ----------- |
 | <a name="output_existing_object_stores"></a> [existing\_object\_stores](#output\_existing\_object\_stores) | Inventory of existing object stores from nutanix\_object\_stores\_v2 (empty unless lookup\_existing\_object\_stores = true). |
 | <a name="output_looked_up_object_stores"></a> [looked\_up\_object\_stores](#output\_looked\_up\_object\_stores) | Individually looked-up object stores from nutanix\_object\_store\_v2, keyed as in object\_store\_lookup\_ext\_ids. |
 | <a name="output_object_store_certificates"></a> [object\_store\_certificates](#output\_object\_store\_certificates) | Managed object-store TLS certificates keyed by input key. |

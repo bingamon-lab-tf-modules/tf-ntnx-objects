@@ -15,6 +15,7 @@ let
     convco
     figlet
     git
+    github-cli
     gnutar
     hello
     jq

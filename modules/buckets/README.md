@@ -132,14 +132,14 @@ together.
 ## Requirements
 
 | Name | Version |
-|------|---------|
+| ---- | ------- |
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.10.0 |
 | <a name="requirement_aws"></a> [aws](#requirement\_aws) | >= 6.0.0, < 7.0.0 |
 
 ## Providers
 
 | Name | Version |
-|------|---------|
+| ---- | ------- |
 | <a name="provider_aws"></a> [aws](#provider\_aws) | 6.60.0 |
 
 ## Modules
@@ -149,7 +149,7 @@ No modules.
 ## Resources
 
 | Name | Type |
-|------|------|
+| ---- | ---- |
 | [aws_s3_bucket.durable](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket) | resource |
 | [aws_s3_bucket.ephemeral](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket) | resource |
 | [aws_s3_bucket_lifecycle_configuration.bucket](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_lifecycle_configuration) | resource |
@@ -160,14 +160,14 @@ No modules.
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
+| ---- | ----------- | ---- | ------- | :------: |
 | <a name="input_buckets"></a> [buckets](#input\_buckets) | Map of buckets to manage on the Objects S3 endpoint, keyed by a logical name. Entries whose 'store' does not match var.store are ignored. | <pre>map(object({<br/>    # Which object store this bucket belongs to. Matched against var.store.<br/>    store = string<br/><br/>    # The S3 bucket name. Immutable after creation.<br/>    name = string<br/><br/>    # Does this bucket have to outlive the cluster? true renders it through a<br/>    # resource block carrying a LITERAL prevent_destroy = true and<br/>    # force_destroy = false. OpenTofu state, the Velero/DR target and the<br/>    # Harbor registry are durable; re-mirroring a registry inside an air gap is<br/>    # the expensive failure this flag exists to prevent. No default — the<br/>    # caller must decide per bucket.<br/>    durable = bool<br/><br/>    # Only honoured for ephemeral buckets. A durable bucket is always<br/>    # force_destroy = false; setting this true alongside durable = true is<br/>    # rejected rather than silently ignored.<br/>    force_destroy = optional(bool, false)<br/><br/>    # S3 object versioning. Required (and forced) when object_lock is set.<br/>    versioning = optional(bool, false)<br/><br/>    # Lifecycle rules. Each rule needs an id and at least one action.<br/>    lifecycle_rules = optional(list(object({<br/>      id      = string<br/>      enabled = optional(bool, true)<br/>      prefix  = optional(string, null)<br/><br/>      # Expire current object versions this many days after creation.<br/>      expiration_days = optional(number, null)<br/><br/>      # Expire non-current versions this many days after they become<br/>      # non-current. Only meaningful on a versioned bucket.<br/>      noncurrent_version_expiration_days = optional(number, null)<br/><br/>      # Abort incomplete multipart uploads after this many days.<br/>      abort_incomplete_multipart_upload_days = optional(number, null)<br/>    })), [])<br/><br/>    # Curated access grants, compiled into an S3 policy document. Principals<br/>    # are S3 principal strings: an ARN, a user name as Objects presents it, or<br/>    # the wildcard (which requires allow_public). Mutually exclusive with<br/>    # policy_json.<br/>    access = optional(object({<br/>      read  = optional(list(string), [])<br/>      write = optional(list(string), [])<br/>    }), null)<br/><br/>    # Escape hatch for anything the curated 'access' block cannot express. A<br/>    # raw S3 policy document. Mutually exclusive with 'access'.<br/>    policy_json = optional(string, null)<br/><br/>    # Explicit acknowledgement that a wildcard principal is intended. Without<br/>    # it, a wildcard Principal — reachable from either 'access' or 'policy_json'<br/>    # — fails the plan. A world-readable bucket must not be a typo.<br/>    allow_public = optional(bool, false)<br/><br/>    # S3 Object Lock (WORM). Objects supports PUT/GET Bucket Object Lock<br/>    # Configuration, Object Retention and Object Legal Hold, but:<br/>    #<br/>    #   - COMPLIANCE mode ONLY. Objects has no governance mode, so GOVERNANCE<br/>    #     is rejected here rather than failing halfway through an apply.<br/>    #   - versioning is mandatory.<br/>    #   - it must be enabled AT BUCKET CREATION and cannot be retrofitted;<br/>    #     adding this to an existing bucket means destroying and recreating it.<br/>    #<br/>    # COMPLIANCE retention is genuinely irreversible: no one, including the<br/>    # storage admin, can delete an object before its retention expires. Hence<br/>    # acknowledge_irreversible, which must be set true explicitly.<br/>    object_lock = optional(object({<br/>      mode                     = optional(string, "COMPLIANCE")<br/>      retention_days           = optional(number, null)<br/>      retention_years          = optional(number, null)<br/>      acknowledge_irreversible = optional(bool, false)<br/>    }), null)<br/>  }))</pre> | `{}` | no |
 | <a name="input_store"></a> [store](#input\_store) | Key of the object store this module instance manages buckets for. Only var.buckets entries whose 'store' matches are managed. Null manages every entry (single-store deployments only). | `string` | `null` | no |
 
 ## Outputs
 
 | Name | Description |
-|------|-------------|
+| ---- | ----------- |
 | <a name="output_bucket_arns"></a> [bucket\_arns](#output\_bucket\_arns) | Map of bucket key => S3 bucket ARN, of the form 'arn:aws:s3:::BUCKET-NAME'. Known at plan time so consumers can build policies referencing these buckets. |
 | <a name="output_bucket_names"></a> [bucket\_names](#output\_bucket\_names) | Map of bucket key => S3 bucket name. Known at plan time so consumers can build policies and app config without waiting on an apply. |
 | <a name="output_bucket_policies"></a> [bucket\_policies](#output\_bucket\_policies) | Map of bucket key => effective bucket policy document, whether compiled from 'access' or supplied via 'policy\_json'. |

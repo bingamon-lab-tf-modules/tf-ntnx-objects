@@ -37,6 +37,9 @@ env:
 
   # Nix
   NIXPKGS_ALLOW_UNFREE: 1
+  CI: "true"
+  SECRETSPEC_PROVIDER: env
+  SECRETSPEC_REASON: ci-workflow
 
 defaults:
   run:
@@ -50,16 +53,12 @@ jobs:
   test:
     name: Test
 
-    runs-on: ${{ matrix.os }}
+    runs-on:
+      group: enterprise/bingamon-lab
+      labels: [self-hosted, linux, x64]
 
     timeout-minutes: 60
     continue-on-error: false
-
-    strategy:
-      fail-fast: true
-      matrix:
-        os:
-          - ubuntu-latest
 
     steps:
       - id: checkout_repository
@@ -69,59 +68,33 @@ jobs:
           lfs: false
           submodules: recursive
 
-      - id: install_nix
-        name: "Install Nix ❄️"
-        uses: cachix/install-nix-action@v31
-        with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-          enable_kvm: true
-
-      - id: cachix
-        name: "Enable Cachix ❄️"
-        uses: cachix/cachix-action@v17
-        if: vars.CACHIX_CACHE_NAME != ''
-        with:
-          name: ${{ vars.CACHIX_CACHE_NAME }}
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          useDaemon: true
-          skipPush: false
-
-      - id: devenv_install
-        name: Devenv install
-        run: |
-          nix profile install --accept-flake-config nixpkgs#devenv
+      - id: setup_devenv
+        name: Set up devenv
+        uses: tars-cloud/actions/composite/setup-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
 
       - id: prek_run
         name: Run Pre-commit Hooks (all files)
-        shell: devenv --no-tui shell --quiet bash -- -e {0}
-        run: prek run --all-files --show-diff-on-failure
+        uses: tars-cloud/actions/composite/run-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        with:
+          run: prek run --all-files --show-diff-on-failure
 
       - id: devenv_test
         name: Devenv test
-        run: |
-          devenv --no-tui test
+        uses: tars-cloud/actions/composite/run-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        with:
+          run: devenv --no-tui test
 
       - id: devenv_status
-        name: Devenv status
+        name: Report devenv status
         if: always()
-        shell: devenv --no-tui shell --quiet bash -- -e {0}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if [[ ${{ steps.devenv_test.outcome }} == 'success' ]];
-          then
-            RESULT="success"
-            DESCRIPTION="Devenv test passed!"
-          else
-            RESULT="failure"
-            DESCRIPTION="Devenv test failed!"
-          fi
-          gh api \
-            repos/${{ github.repository }}/statuses/${{ github.sha }} \
-            -f state=${RESULT} \
-            -f context="${{ github.workflow }}" \
-            -f description="${DESCRIPTION}" \
-            -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" || {
-              echo "Failed to report devenv status!"
-              exit 1
-            }
+        uses: tars-cloud/actions/composite/report-status@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        with:
+          results: |
+            setup=${{ steps.setup_devenv.outcome }}
+            hooks=${{ steps.prek_run.outcome }}
+            test=${{ steps.devenv_test.outcome }}
+          publish-status: "true"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          status-context: Devenv
+          reporting-errors: fail
+          fail-on-error: "true"
