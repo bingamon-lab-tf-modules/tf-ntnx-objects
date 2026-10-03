@@ -40,6 +40,10 @@ env:
 
   # Nix
   NIXPKGS_ALLOW_UNFREE: 1
+  CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+  CI: "true"
+  SECRETSPEC_PROVIDER: env
+  SECRETSPEC_REASON: ci-workflow
 
   # OpenTofu Module
   MODULE_HOME: module
@@ -56,7 +60,9 @@ jobs:
   test:
     name: OpenTofu Module (Test)
 
-    runs-on: ${{ matrix.os }}
+    runs-on:
+      group: enterprise/bingamon-lab
+      labels: [self-hosted, linux, x64]
 
     # Only run on pull request, workflow dispatch, or releases
     if: |
@@ -66,12 +72,6 @@ jobs:
 
     timeout-minutes: 60
     continue-on-error: false
-
-    strategy:
-      fail-fast: true
-      matrix:
-        os:
-          - ubuntu-latest
 
     steps:
       - id: checkout_repository
@@ -91,138 +91,127 @@ jobs:
           lfs: false
           submodules: recursive
 
-      - id: install_nix
-        name: "Install Nix ❄️"
-        uses: cachix/install-nix-action@v31
-        with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-          enable_kvm: true
-
-      - id: cachix
-        name: "Enable Cachix ❄️"
-        uses: cachix/cachix-action@v17
-        if: vars.CACHIX_CACHE_NAME != ''
-        with:
-          name: ${{ vars.CACHIX_CACHE_NAME }}
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          useDaemon: true
-          skipPush: false
-
-      - id: devenv_install
-        name: Devenv install
-        run: |
-          nix profile install --accept-flake-config nixpkgs#devenv
+      - id: setup_devenv
+        name: Set up devenv
+        uses: tars-cloud/actions/composite/setup-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
 
       - id: opentofu_init
         name: OpenTofu Init
-        shell: devenv --no-tui shell --quiet bash -- -e {0}
-        run: |
-          echo "🔧 Initializing OpenTofu..."
-          cd "${MODULE_HOME}"
-          if ! tofu init -backend=false;
-          then
-            echo "❌ OpenTofu initialization failed!"
-            exit 1
-          fi
-          echo "✅ OpenTofu initialization completed"
+        uses: tars-cloud/actions/composite/run-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        with:
+          run: |
+            echo "🔧 Initializing OpenTofu..."
+            cd "${MODULE_HOME}"
+            if ! tofu init -backend=false;
+            then
+              echo "❌ OpenTofu initialization failed!"
+              exit 1
+            fi
+            echo "✅ OpenTofu initialization completed"
 
       - id: opentofu_format
         name: OpenTofu Format
-        shell: devenv --no-tui shell --quiet bash -- -e {0}
-        run: |
-          echo "📝 Checking OpenTofu format..."
-          if ! tofu fmt -check -recursive "${MODULE_HOME}";
-          then
-            echo "❌ OpenTofu files are not properly formatted!"
-            echo "💡 Run: tofu fmt -recursive ${MODULE_HOME}"
-            exit 1
-          fi
-          echo "✅ OpenTofu format check passed"
+        uses: tars-cloud/actions/composite/run-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        with:
+          run: |
+            echo "📝 Checking OpenTofu format..."
+            if ! tofu fmt -check -recursive "${MODULE_HOME}";
+            then
+              echo "❌ OpenTofu files are not properly formatted!"
+              echo "💡 Run: tofu fmt -recursive ${MODULE_HOME}"
+              exit 1
+            fi
+            echo "✅ OpenTofu format check passed"
 
       - id: opentofu_docs_check
         name: OpenTofu Documentation Check
-        shell: devenv --no-tui shell --quiet bash -- -e {0}
-        run: |
-          echo "📚 Checking OpenTofu documentation..."
-          if command -v terraform-docs &> /dev/null;
-          then
-            # Check if README needs updating
-            if ! terraform-docs --output-check --config .terraform-docs.yml ${MODULE_HOME};
+        uses: tars-cloud/actions/composite/run-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        with:
+          run: |
+            echo "📚 Checking OpenTofu documentation..."
+            if command -v terraform-docs &> /dev/null;
             then
-              echo "❌ Module README.md is out of date!"
-              echo "💡 Run: tofu-docs ${MODULE_HOME} locally to update the README.md"
-              echo "Displaying diff..."
-              terraform-docs --output-check --config .terraform-docs.yml ${MODULE_HOME}
+              # Check if README needs updating
+              if ! terraform-docs --output-check --config .terraform-docs.yml ${MODULE_HOME};
+              then
+                echo "❌ Module README.md is out of date!"
+                echo "💡 Run: tofu-docs ${MODULE_HOME} locally to update the README.md"
+                echo "Displaying diff..."
+                terraform-docs --output-check --config .terraform-docs.yml ${MODULE_HOME}
+                exit 1
+              fi
+              echo "✅ Documentation is up to date"
+              exit 0
+            else
+              echo "⚠️ terraform-docs not available, documentation check failed"
               exit 1
             fi
-            echo "✅ Documentation is up to date"
-            exit 0
-          else
-            echo "⚠️ terraform-docs not available, documentation check failed"
-            exit 1
-          fi
 
       - id: opentofu_legacy_check
         name: OpenTofu Legacy Resource Sweep
-        shell: devenv --no-tui shell --quiet bash -- -e {0}
-        run: |
-          echo "🚫 Checking for legacy (non-_v2) nutanix resources..."
-          if ! ./scripts/check-legacy-resources.sh;
-          then
-            echo "❌ Legacy nutanix resources or data sources found!"
-            exit 1
-          fi
-          echo "✅ No legacy nutanix resources or data sources"
+        uses: tars-cloud/actions/composite/run-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        with:
+          run: |
+            echo "🚫 Checking for legacy (non-_v2) nutanix resources..."
+            if ! ./scripts/check-legacy-resources.sh;
+            then
+              echo "❌ Legacy nutanix resources or data sources found!"
+              exit 1
+            fi
+            echo "✅ No legacy nutanix resources or data sources"
 
       - id: opentofu_validate
         name: OpenTofu Validate
-        shell: devenv --no-tui shell --quiet bash -- -e {0}
-        run: |
-          echo "🔍 Validating OpenTofu configuration..."
-          cd "${MODULE_HOME}"
-          if ! tofu validate;
-          then
-            echo "❌ OpenTofu validation failed!"
-            exit 1
-          fi
-          echo "✅ OpenTofu validation passed"
+        uses: tars-cloud/actions/composite/run-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        with:
+          run: |
+            echo "🔍 Validating OpenTofu configuration..."
+            cd "${MODULE_HOME}"
+            if ! tofu validate;
+            then
+              echo "❌ OpenTofu validation failed!"
+              exit 1
+            fi
+            echo "✅ OpenTofu validation passed"
 
       - id: opentofu_security_scan
         name: OpenTofu Security Scan
-        shell: devenv --no-tui shell --quiet bash -- -e {0}
-        run: |
-          echo "🔒 Running security scan..."
-          if command -v trivy &> /dev/null;
-          then
-            if ! trivy fs --exit-code 1 "${MODULE_HOME}";
+        uses: tars-cloud/actions/composite/run-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        with:
+          run: |
+            echo "🔒 Running security scan..."
+            if command -v trivy &> /dev/null;
             then
-              echo "❌ Security scan found issues!"
+              if ! trivy fs --scanners vuln,secret --exit-code 1 "${MODULE_HOME}";
+              then
+                echo "❌ Security scan found issues!"
+                exit 1
+              fi
+              echo "✅ Security scan passed"
+            else
+              echo "⚠️ Trivy not available, security scan failed"
               exit 1
             fi
-            echo "✅ Security scan passed"
-          else
-            echo "⚠️ Trivy not available, security scan failed"
-            exit 1
-          fi
 
       - id: opentofu_lint
         name: OpenTofu Lint
-        shell: devenv --no-tui shell --quiet bash -- -e {0}
-        run: |
-          echo "🧹 Running OpenTofu linting..."
-          if command -v tflint &> /dev/null;
-          then
-            cd "${MODULE_HOME}"
-            if ! tflint --format=compact;
+        uses: tars-cloud/actions/composite/run-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        with:
+          run: |
+            echo "🧹 Running OpenTofu linting..."
+            if command -v tflint &> /dev/null;
             then
-              echo "❌ OpenTofu linting failed!"
+              cd "${MODULE_HOME}"
+              if ! tflint --format=compact;
+              then
+                echo "❌ OpenTofu linting failed!"
+                exit 1
+              fi
+              echo "✅ OpenTofu linting passed"
+            else
+              echo "⚠️ tflint not available, linting failed"
               exit 1
             fi
-            echo "✅ OpenTofu linting passed"
-          else
-            echo "⚠️ tflint not available, linting failed"
-            exit 1
-          fi
 
       - id: opentofu_test_guard
         name: OpenTofu Test Guard
@@ -231,16 +220,17 @@ jobs:
 
       - id: opentofu_test
         name: OpenTofu Test
-        shell: devenv --no-tui shell --quiet bash -- -e {0}
-        run: |
-          echo "🧪 Running OpenTofu tests..."
-          cd "${MODULE_HOME}"
-          if ! tofu test -verbose;
-          then
-            echo "❌ OpenTofu tests failed!"
-            exit 1
-          fi
-          echo "✅ OpenTofu tests passed"
+        uses: tars-cloud/actions/composite/run-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        with:
+          run: |
+            echo "🧪 Running OpenTofu tests..."
+            cd "${MODULE_HOME}"
+            if ! tofu test -verbose;
+            then
+              echo "❌ OpenTofu tests failed!"
+              exit 1
+            fi
+            echo "✅ OpenTofu tests passed"
 
       - id: opentofu_status
         name: OpenTofu Status
@@ -282,7 +272,9 @@ jobs:
   publish:
     name: OpenTofu Module (Publish)
 
-    runs-on: ${{ matrix.os }}
+    runs-on:
+      group: enterprise/bingamon-lab
+      labels: [self-hosted, linux, x64]
 
     needs: test
 
@@ -294,12 +286,6 @@ jobs:
     timeout-minutes: 30
     continue-on-error: false
 
-    strategy:
-      fail-fast: true
-      matrix:
-        os:
-          - ubuntu-latest
-
     steps:
       - id: checkout_repository_tag
         name: Checkout repository tag
@@ -310,27 +296,9 @@ jobs:
           lfs: false
           submodules: recursive
 
-      - id: install_nix
-        name: "Install Nix ❄️"
-        uses: cachix/install-nix-action@v31
-        with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-          enable_kvm: true
-
-      - id: cachix
-        name: "Enable Cachix ❄️"
-        uses: cachix/cachix-action@v17
-        if: vars.CACHIX_CACHE_NAME != ''
-        with:
-          name: ${{ vars.CACHIX_CACHE_NAME }}
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          useDaemon: true
-          skipPush: false
-
-      - id: devenv_install
-        name: Devenv install
-        run: |
-          nix profile install --accept-flake-config nixpkgs#devenv
+      - id: setup_devenv
+        name: Set up devenv
+        uses: tars-cloud/actions/composite/setup-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
 
       - id: extract_version
         name: Extract version from release
@@ -345,55 +313,57 @@ jobs:
 
       - id: create_package
         name: Create module package
-        shell: devenv --no-tui shell --quiet bash -- -e {0}
-        run: |
-          echo "📦 Creating module package..."
+        uses: tars-cloud/actions/composite/run-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        with:
+          run: |
+            echo "📦 Creating module package..."
 
-          # Create a clean package of the module
-          PACKAGE_NAME="${{ env.PROJECT }}-${{ steps.extract_version.outputs.VERSION_STRIPPED }}"
+            # Create a clean package of the module
+            PACKAGE_NAME="${{ env.PROJECT }}-${{ steps.extract_version.outputs.VERSION_STRIPPED }}"
 
-          # Copy module files
-          mkdir -p "/tmp/${PACKAGE_NAME}"
-          cp -r "${MODULE_HOME}"/* "/tmp/${PACKAGE_NAME}/"
+            # Copy module files
+            PACKAGE_ROOT=$(mktemp -d "${RUNNER_TEMP}/module-package.XXXXXX")
+            mkdir -p "${PACKAGE_ROOT}/${PACKAGE_NAME}"
+            cp -r "${MODULE_HOME}"/* "${PACKAGE_ROOT}/${PACKAGE_NAME}/"
 
-          # Create tarball
-          cd /tmp
-          tar -czf "${PACKAGE_NAME}.tar.gz" "${PACKAGE_NAME}"
+            # Create tarball
+            tar -czf "${PACKAGE_ROOT}/${PACKAGE_NAME}.tar.gz" -C "${PACKAGE_ROOT}" "${PACKAGE_NAME}"
 
-          echo "PACKAGE_PATH=/tmp/${PACKAGE_NAME}.tar.gz" >> "$GITHUB_OUTPUT"
-          echo "PACKAGE_NAME=${PACKAGE_NAME}" >> "$GITHUB_OUTPUT"
-          echo "✅ Package created: ${PACKAGE_NAME}.tar.gz"
-          ls -la /tmp/${PACKAGE_NAME}
+            jq -n --arg path "${PACKAGE_ROOT}/${PACKAGE_NAME}.tar.gz" --arg name "$PACKAGE_NAME" \
+              '{PACKAGE_PATH: $path, PACKAGE_NAME: $name}' > "$DEVENV_RESULT_FILE"
+            echo "✅ Package created: ${PACKAGE_NAME}.tar.gz"
+            ls -la "${PACKAGE_ROOT}/${PACKAGE_NAME}"
 
       - id: publish_artifactory
         name: Publish to Artifactory
         if: vars.ARTIFACTORY_URL != '' && steps.create_package.outcome == 'success'
-        shell: devenv --no-tui shell --quiet bash -- -e {0}
+        uses: tars-cloud/actions/composite/run-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
         env:
           ARTIFACTORY_URL: ${{ vars.ARTIFACTORY_URL }}
           ARTIFACTORY_TOKEN: ${{ secrets.ARTIFACTORY_TOKEN }}
-        run: |
-          echo "🚀 Publishing to Artifactory..."
-          echo "URL: ${ARTIFACTORY_URL}"
+        with:
+          run: |
+            echo "🚀 Publishing to Artifactory..."
+            echo "URL: ${ARTIFACTORY_URL}"
 
-          PACKAGE_PATH="${{ steps.create_package.outputs.PACKAGE_PATH }}"
-          PACKAGE_NAME="${{ steps.create_package.outputs.PACKAGE_NAME }}"
+            PACKAGE_PATH="${{ fromJSON(steps.create_package.outputs.result || '{}').PACKAGE_PATH }}"
+            PACKAGE_NAME="${{ fromJSON(steps.create_package.outputs.result || '{}').PACKAGE_NAME }}"
 
-          if [[ "${ARTIFACTORY_TOKEN:-EMPTY}" == "EMPTY" ]];
-          then
-            echo "❌ ARTIFACTORY_TOKEN secret not configured!"
-            exit 1
-          fi
+            if [[ "${ARTIFACTORY_TOKEN:-EMPTY}" == "EMPTY" ]];
+            then
+              echo "❌ ARTIFACTORY_TOKEN secret not configured!"
+              exit 1
+            fi
 
-          # Upload to Artifactory
-          curl  --fail --header "X-JFrog-Art-Api:${ARTIFACTORY_TOKEN}" \
-          --upload-file "${PACKAGE_PATH}" \
-          "${ARTIFACTORY_URL}/terraform-modules/${PACKAGE_NAME}.tar.gz" || {
-            echo "❌ Failed to upload to Artifactory!"
-            exit 1
-          }
+            # Upload to Artifactory
+            curl  --fail --header "X-JFrog-Art-Api:${ARTIFACTORY_TOKEN}" \
+            --upload-file "${PACKAGE_PATH}" \
+            "${ARTIFACTORY_URL}/terraform-modules/${PACKAGE_NAME}.tar.gz" || {
+              echo "❌ Failed to upload to Artifactory!"
+              exit 1
+            }
 
-          echo "✅ Successfully published to Artifactory"
+            echo "✅ Successfully published to Artifactory"
 
       - id: publish_status
         name: Publish Status

@@ -10,6 +10,7 @@ name: Semantic Versioning
 on:  # yamllint disable-line rule:truthy
   # Dry Run (Pull Request)
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
     branches:
       - main
       - master
@@ -52,6 +53,10 @@ env:
 
   # Nix
   NIXPKGS_ALLOW_UNFREE: 1
+  CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+  CI: "true"
+  SECRETSPEC_PROVIDER: env
+  SECRETSPEC_REASON: ci-workflow
 
   # Semantic Versioning changelog tool (convco or github)
   # - Use convco for conventional commits
@@ -75,16 +80,12 @@ jobs:
       github.event_name == 'pull_request' ||
       github.event_name == 'push'
 
-    runs-on: ${{ matrix.os }}
+    runs-on:
+      group: enterprise/bingamon-lab
+      labels: [self-hosted, linux, x64]
 
     timeout-minutes: 15
     continue-on-error: false
-
-    strategy:
-      fail-fast: true
-      matrix:
-        os:
-          - ubuntu-latest
 
     steps:
       - id: checkout_repository
@@ -331,19 +332,15 @@ jobs:
     if: github.event_name == 'push' &&
       needs.semantic-version.outputs.version-bump == 'true'
 
-    runs-on: ${{ matrix.os }}
+    runs-on:
+      group: enterprise/bingamon-lab
+      labels: [self-hosted, linux, x64]
 
     needs:
       - semantic-version
 
     timeout-minutes: 15
     continue-on-error: false
-
-    strategy:
-      fail-fast: true
-      matrix:
-        os:
-          - ubuntu-latest
 
     steps:
       - id: checkout_repository
@@ -408,7 +405,9 @@ jobs:
       needs.semantic-version.outputs.version-bump == 'true' &&
       needs.tag.outputs.tag-created == 'true'
 
-    runs-on: ${{ matrix.os }}
+    runs-on:
+      group: enterprise/bingamon-lab
+      labels: [self-hosted, linux, x64]
 
     needs:
       - semantic-version
@@ -416,12 +415,6 @@ jobs:
 
     timeout-minutes: 15
     continue-on-error: false
-
-    strategy:
-      fail-fast: true
-      matrix:
-        os:
-          - ubuntu-latest
 
     steps:
       - id: checkout_repository
@@ -432,27 +425,9 @@ jobs:
           submodules: recursive
           fetch-depth: 0 # Need full history for convco
 
-      - id: install_nix
-        name: "Install Nix ❄️"
-        uses: cachix/install-nix-action@v31
-        with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-          enable_kvm: true
-
-      - id: cachix
-        name: "Enable Cachix ❄️"
-        uses: cachix/cachix-action@v17
-        if: vars.CACHIX_CACHE_NAME != ''
-        with:
-          name: ${{ vars.CACHIX_CACHE_NAME }}
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          useDaemon: true
-          skipPush: false
-
-      - id: devenv_install
-        name: Devenv install
-        run: |
-          nix profile install --accept-flake-config nixpkgs#devenv
+      - id: setup_devenv
+        name: Set up devenv
+        uses: tars-cloud/actions/composite/setup-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
 
       - id: generate_changelog
         name: Generate changelog with convco
@@ -460,66 +435,67 @@ jobs:
           (github.event.inputs.changelog_tool == 'convco') ||
           (github.event.inputs.changelog_tool == null && vars.SEMVER_CHANGELOG_TOOL == 'convco') ||
           (github.event.inputs.changelog_tool == null && vars.SEMVER_CHANGELOG_TOOL == null && env.SEMVER_CHANGELOG_TOOL == 'convco')
-        shell: devenv --no-tui shell --quiet bash -- -e {0}
-        run: |
-          echo "📝 Generating changelog..."
+        uses: tars-cloud/actions/composite/run-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        with:
+          run: |
+            echo "📝 Generating changelog..."
 
-          CHANGELOG_FILE="/tmp/changelog.md"
-          echo "CHANGELOG_FILE=${CHANGELOG_FILE}" >> "$GITHUB_OUTPUT"
+            CHANGELOG_FILE="${RUNNER_TEMP}/changelog.md"
+            jq -n --arg path "$CHANGELOG_FILE" '{CHANGELOG_FILE: $path}' > "$DEVENV_RESULT_FILE"
 
-          # Get the current tag that was just created and strip the 'v' prefix
-          CURRENT_TAG="${{ needs.semantic-version.outputs.tag }}"
-          CURRENT_TAG_STRIPPED="$(echo ${CURRENT_TAG} | sed 's/^v//')"
-          echo "Current tag: ${CURRENT_TAG}"
-          echo "Version (stripped): ${CURRENT_TAG_STRIPPED}"
+            # Get the current tag that was just created and strip the 'v' prefix
+            CURRENT_TAG="${{ needs.semantic-version.outputs.tag }}"
+            CURRENT_TAG_STRIPPED="$(echo ${CURRENT_TAG} | sed 's/^v//')"
+            echo "Current tag: ${CURRENT_TAG}"
+            echo "Version (stripped): ${CURRENT_TAG_STRIPPED}"
 
-          # Find the previous tag (excluding the current one that was just created)
-          PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -v "^${CURRENT_TAG}$" | head -n 1)
-          PREVIOUS_TAG_STRIPPED="$(echo ${PREVIOUS_TAG} | sed 's/^v//')"
+            # Find the previous tag (excluding the current one that was just created)
+            PREVIOUS_TAG=$(git tag --sort=-version:refname | awk -v current="$CURRENT_TAG" '$0 != current && !found { print; found = 1 }')
+            PREVIOUS_TAG_STRIPPED="$(echo ${PREVIOUS_TAG} | sed 's/^v//')"
 
-          # Initialize changelog file (overwrite any existing content)
-          echo "" > "${CHANGELOG_FILE}"
+            # Initialize changelog file (overwrite any existing content)
+            echo "" > "${CHANGELOG_FILE}"
 
-          if [[ "${PREVIOUS_TAG:-EMPTY}" == "EMPTY" ]];
-          then
-            echo "📋 No previous tag found, generating changelog from beginning"
-
-            # For first release, generate changelog for all commits
-            if convco changelog --unreleased "${CURRENT_TAG_STRIPPED}" > "${CHANGELOG_FILE}" 2>/dev/null;
+            if [[ "${PREVIOUS_TAG:-EMPTY}" == "EMPTY" ]];
             then
-              echo "✅ Generated full changelog with convco"
+              echo "📋 No previous tag found, generating changelog from beginning"
+
+              # For first release, generate changelog for all commits
+              if convco changelog --unreleased "${CURRENT_TAG_STRIPPED}" > "${CHANGELOG_FILE}" 2>/dev/null;
+              then
+                echo "✅ Generated full changelog with convco"
+              else
+                echo "⚠️  convco failed, will use GitHub's built-in release notes instead"
+                echo "" > "${CHANGELOG_FILE}"
+              fi
+
             else
-              echo "⚠️  convco failed, will use GitHub's built-in release notes instead"
-              echo "" > "${CHANGELOG_FILE}"
+              echo "📋 Generating changelog from ${PREVIOUS_TAG} to HEAD"
+
+              # Generate changelog for the range between tags
+              if convco changelog "${PREVIOUS_TAG}..HEAD" --unreleased "${CURRENT_TAG_STRIPPED}" > "${CHANGELOG_FILE}" 2>/dev/null;
+              then
+                echo "✅ Generated diff changelog with convco"
+              else
+                echo "⚠️  convco failed, will use GitHub's built-in release notes instead"
+                echo "" > "${CHANGELOG_FILE}"
+              fi
             fi
 
-          else
-            echo "📋 Generating changelog from ${PREVIOUS_TAG} to HEAD"
+            # Check if changelog was generated successfully
+            CHANGELOG_LINES=$(wc -l < "${CHANGELOG_FILE}" | tr -d ' ')
 
-            # Generate changelog for the range between tags
-            if convco changelog "${PREVIOUS_TAG}..HEAD" --unreleased "${CURRENT_TAG_STRIPPED}" > "${CHANGELOG_FILE}" 2>/dev/null;
+            if [[ "${CHANGELOG_LINES}" -gt 1 ]];
             then
-              echo "✅ Generated diff changelog with convco"
+              echo "✅ Changelog generated successfully"
+              echo "📊 Total lines: ${CHANGELOG_LINES}"
+              echo "📄 Complete changelog content:"
+              echo "===================="
+              cat "${CHANGELOG_FILE}"
+              echo "===================="
             else
-              echo "⚠️  convco failed, will use GitHub's built-in release notes instead"
-              echo "" > "${CHANGELOG_FILE}"
+              echo "⚠️  No meaningful changelog generated (${CHANGELOG_LINES} lines), will use GitHub's built-in release notes instead"
             fi
-          fi
-
-          # Check if changelog was generated successfully
-          CHANGELOG_LINES=$(wc -l < "${CHANGELOG_FILE}" | tr -d ' ')
-
-          if [[ "${CHANGELOG_LINES}" -gt 1 ]];
-          then
-            echo "✅ Changelog generated successfully"
-            echo "📊 Total lines: ${CHANGELOG_LINES}"
-            echo "📄 Complete changelog content:"
-            echo "===================="
-            cat "${CHANGELOG_FILE}"
-            echo "===================="
-          else
-            echo "⚠️  No meaningful changelog generated (${CHANGELOG_LINES} lines), will use GitHub's built-in release notes instead"
-          fi
 
       - id: create_release
         name: Create GitHub release
@@ -538,7 +514,7 @@ jobs:
             const isPrerelease = isCandidate;
 
             // Changelog file location (may be empty if convco step was skipped)
-            const changelogFile = '${{ steps.generate_changelog.outputs.CHANGELOG_FILE }}' || '/tmp/changelog.md';
+            const changelogFile = '${{ fromJSON(steps.generate_changelog.outputs.result || '{}').CHANGELOG_FILE }}';
 
             // Determine changelog tool priority:
             // 1. Workflow input (manual trigger)
@@ -684,7 +660,9 @@ jobs:
   status:
     name: Report Status
 
-    runs-on: ${{ matrix.os }}
+    runs-on:
+      group: enterprise/bingamon-lab
+      labels: [self-hosted, linux, x64]
 
     needs:
       - semantic-version
@@ -696,91 +674,20 @@ jobs:
     timeout-minutes: 10
     continue-on-error: true
 
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-
     steps:
-      - id: determine_status
-        name: Determine overall status
-        run: |
-          echo "=== Workflow Status Summary ==="
-          echo "Semantic Version Job: ${{ needs.semantic-version.result }}"
-          echo "Tag Job: ${{ needs.tag.result }}"
-          echo "Release Job: ${{ needs.release.result }}"
-
-          # Determine overall result
-          if [[ "${{ needs.semantic-version.result }}" == "success" ]];
-          then
-
-            if [[ "${{ github.event_name }}" == "pull_request" ]];
-            then
-              RESULT="success"
-              DESCRIPTION="Semantic version calculated: ${{ needs.semantic-version.outputs.semver || 'N/A' }}"
-            elif [[ "${{ needs.semantic-version.outputs.version-bump }}" == "false" ]];
-            then
-              RESULT="success"
-              VERSION_TYPE="${{ needs.semantic-version.outputs.version-type || 'N/A' }}"
-              DESCRIPTION="No version bump required (${VERSION_TYPE} change)"
-            elif [[ "${{ needs.tag.result }}" == "success" && "${{ needs.release.result }}" == "success" ]];
-            then
-              RESULT="success"
-              TAG="${{ needs.semantic-version.outputs.tag || 'N/A' }}"
-              VERSION_TYPE="${{ needs.semantic-version.outputs.version-type || 'N/A' }}"
-              DESCRIPTION="Successfully created ${VERSION_TYPE} release: ${TAG}"
-            elif [[ "${{ needs.tag.result }}" == "failure" ]];
-            then
-              RESULT="failure"
-              DESCRIPTION="Failed to create git tag"
-            elif [[ "${{ needs.release.result }}" == "failure" ]];
-            then
-              RESULT="failure"
-              DESCRIPTION="Failed to create GitHub release"
-            else
-              RESULT="failure"
-              DESCRIPTION="Unknown failure in tag or release creation"
-            fi
-          else
-            RESULT="failure"
-            DESCRIPTION="Failed to determine semantic version"
-          fi
-
-          echo "RESULT=${RESULT}" >> "$GITHUB_OUTPUT"
-          echo "DESCRIPTION=${DESCRIPTION}" >> "$GITHUB_OUTPUT"
-
-          echo "=== Final Status ==="
-          echo "Result: ${RESULT}"
-          echo "Description: ${DESCRIPTION}"
-
       - id: report_status
-        name: Report status to GitHub
+        name: Report semantic versioning status
         if: always()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          RESULT="${{ steps.determine_status.outputs.RESULT }}"
-          DESCRIPTION="${{ steps.determine_status.outputs.DESCRIPTION }}"
-
-          # Install gh CLI if not available
-          if ! command -v gh &> /dev/null;
-          then
-            echo "Installing GitHub CLI..."
-            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-            sudo apt update
-            sudo apt install gh -y
-          fi
-
-          gh api \
-            repos/${{ github.repository }}/statuses/${{ github.sha }} \
-            -f state="${RESULT}" \
-            -f context="${{ github.workflow }}" \
-            -f description="${DESCRIPTION}" \
-            -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" || {
-              echo "❌ Failed to report semantic versioning status!"
-              exit 1
-            }
-
-          echo "✅ Successfully reported status: ${RESULT}"
+        uses: tars-cloud/actions/composite/report-status@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        with:
+          results: |
+            semantic-version=${{ needs.semantic-version.result }}
+            tag=${{ needs.tag.result }}
+            release=${{ needs.release.result }}
+          allow-skipped: |
+            tag
+            release
+          publish-status: "true"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          status-context: Semantic Versioning
+          reporting-errors: fail

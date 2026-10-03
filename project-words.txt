@@ -95,3 +95,5 @@ prek
 Velero
 COSI
 footgun
+SecretSpec
+mktemp
