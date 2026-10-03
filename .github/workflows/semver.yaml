@@ -53,6 +53,7 @@ env:
 
   # Nix
   NIXPKGS_ALLOW_UNFREE: 1
+  CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
   CI: "true"
   SECRETSPEC_PROVIDER: env
   SECRETSPEC_REASON: ci-workflow
