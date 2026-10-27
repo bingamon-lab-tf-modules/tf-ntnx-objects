@@ -1,22 +1,14 @@
 ---
-##################################################
-# Name: opentofu-module.yaml
-# Description: Workflow for OpenTofu Modules
-##################################################
-
-name: OpenTofu Module
+name: "Consumer: OpenTofu Module"
 
 # prettier-ignore
 on:  # yamllint disable-line rule:truthy
-  # Module Build/Test (manual)
-  workflow_dispatch:
-  # Module Build/Test (auto)
+  workflow_dispatch: {}
   pull_request:
     branches:
       - main
       - master
       - trunk
-  # Module Publish (releases)
   release:
     types:
       - prereleased
@@ -28,24 +20,20 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
   packages: write
   pull-requests: write
   statuses: write
 
 env:
-  # GitHub
   PROJECT: ${{ github.repository }}
   BRANCH_NAME_CURRENT: ${{ github.head_ref || github.ref_name }}
   BRANCH_NAME_DEFAULT: ${{ github.event.repository.default_branch }}
-
-  # Nix
   NIXPKGS_ALLOW_UNFREE: 1
   CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
   CI: "true"
   SECRETSPEC_PROVIDER: env
   SECRETSPEC_REASON: ci-workflow
-
-  # OpenTofu Module
   MODULE_HOME: module
 
 defaults:
@@ -53,326 +41,315 @@ defaults:
     shell: bash
 
 jobs:
-  ##################################################
-  # BTest the OpenTofu Module
-  ##################################################
-
+  # -------------------------------------------------
+  # Test the OpenTofu Module
+  # -------------------------------------------------
   test:
     name: OpenTofu Module (Test)
-
-    runs-on:
-      group: enterprise/bingamon-lab
-      labels: [self-hosted, linux, x64]
-
-    # Only run on pull request, workflow dispatch, or releases
-    if: |
+    if: >-
       github.event_name == 'pull_request' ||
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'release'
-
+    runs-on: ${{ fromJSON(vars.TARS_CLOUD_RUNNER_TYPE == 'self-hosted' &&
+      (vars.TARS_CLOUD_RUNNER_AMD64 || '["self-hosted","linux","x64"]') ||
+      '"ubuntu-24.04"') }}
     timeout-minutes: 60
     continue-on-error: false
-
+    outputs:
+      status: ${{ steps.report_opentofu_status.outputs.result }}
     steps:
-      - id: checkout_repository
-        name: Checkout repository
-        if: github.event_name != 'release'
-        uses: actions/checkout@v7
-        with:
-          lfs: false
-          submodules: recursive
+      - id: validate_runner_mode
+        name: Validate Runner Mode
+        shell: bash
+        env:
+          RUNNER_MODE: ${{ vars.TARS_CLOUD_RUNNER_TYPE }}
+        run: |
+          case "$RUNNER_MODE" in
+            ""|saas|self-hosted) ;;
+            *) echo "::error::TARS_CLOUD_RUNNER_TYPE must be saas or self-hosted."; exit 1 ;;
+          esac
 
-      - id: checkout_repository_tag
-        name: Checkout repository tag
-        if: github.event_name == 'release'
-        uses: actions/checkout@v7
+      - id: set_up_consumer
+        name: Set Up Consumer
+        uses: tars-cloud/actions/composite/setup-consumer@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
         with:
-          ref: ${{ github.event.release.tag_name }}
-          lfs: false
+          debug: "false"
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || '' }}
+          lfs: "false"
           submodules: recursive
-
-      - id: setup_devenv
-        name: Set up devenv
-        uses: tars-cloud/actions/composite/setup-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+          system: x86_64-linux
+          warmup: "false"
 
       - id: opentofu_init
         name: OpenTofu Init
-        uses: tars-cloud/actions/composite/run-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
         with:
+          system: x86_64-linux
+          github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
           run: |
-            echo "🔧 Initializing OpenTofu..."
+            echo "Initializing OpenTofu..."
             cd "${MODULE_HOME}"
-            if ! tofu init -backend=false;
-            then
-              echo "❌ OpenTofu initialization failed!"
+            if ! tofu init -backend=false; then
+              echo "OpenTofu initialization failed!"
               exit 1
             fi
-            echo "✅ OpenTofu initialization completed"
+            echo "OpenTofu initialization completed"
 
       - id: opentofu_format
         name: OpenTofu Format
-        uses: tars-cloud/actions/composite/run-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
         with:
+          system: x86_64-linux
+          github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
           run: |
-            echo "📝 Checking OpenTofu format..."
-            if ! tofu fmt -check -recursive "${MODULE_HOME}";
-            then
-              echo "❌ OpenTofu files are not properly formatted!"
-              echo "💡 Run: tofu fmt -recursive ${MODULE_HOME}"
+            echo "Checking OpenTofu format..."
+            if ! tofu fmt -check -recursive "${MODULE_HOME}"; then
+              echo "OpenTofu files are not properly formatted!"
+              echo "Run: tofu fmt -recursive ${MODULE_HOME}"
               exit 1
             fi
-            echo "✅ OpenTofu format check passed"
+            echo "OpenTofu format check passed"
 
       - id: opentofu_docs_check
         name: OpenTofu Documentation Check
-        uses: tars-cloud/actions/composite/run-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
         with:
+          system: x86_64-linux
+          github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
           run: |
-            echo "📚 Checking OpenTofu documentation..."
-            if command -v terraform-docs &> /dev/null;
-            then
-              # Check if README needs updating
-              if ! terraform-docs --output-check --config .terraform-docs.yml ${MODULE_HOME};
-              then
-                echo "❌ Module README.md is out of date!"
-                echo "💡 Run: tofu-docs ${MODULE_HOME} locally to update the README.md"
-                echo "Displaying diff..."
-                terraform-docs --output-check --config .terraform-docs.yml ${MODULE_HOME}
+            echo "Checking OpenTofu documentation..."
+            if command -v terraform-docs &> /dev/null; then
+              if ! terraform-docs --output-check --config .terraform-docs.yml "${MODULE_HOME}"; then
+                echo "Module README.md is out of date!"
+                echo "Run: tofu-docs ${MODULE_HOME} locally to update the README.md"
+                terraform-docs --output-check --config .terraform-docs.yml "${MODULE_HOME}"
                 exit 1
               fi
-              echo "✅ Documentation is up to date"
-              exit 0
+              echo "Documentation is up to date"
             else
-              echo "⚠️ terraform-docs not available, documentation check failed"
+              echo "terraform-docs not available, documentation check failed"
               exit 1
             fi
 
       - id: opentofu_legacy_check
         name: OpenTofu Legacy Resource Sweep
-        uses: tars-cloud/actions/composite/run-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
         with:
+          system: x86_64-linux
+          github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
           run: |
-            echo "🚫 Checking for legacy (non-_v2) nutanix resources..."
-            if ! ./scripts/check-legacy-resources.sh;
-            then
-              echo "❌ Legacy nutanix resources or data sources found!"
-              exit 1
+            if [[ -x ./scripts/check-legacy-resources.sh ]]; then
+              echo "Checking for legacy (non-_v2) Nutanix resources..."
+              if ! ./scripts/check-legacy-resources.sh; then
+                echo "Legacy Nutanix resources or data sources found!"
+                exit 1
+              fi
+              echo "No legacy Nutanix resources or data sources"
+            else
+              echo "No legacy resource check script present; skipping."
             fi
-            echo "✅ No legacy nutanix resources or data sources"
 
       - id: opentofu_validate
         name: OpenTofu Validate
-        uses: tars-cloud/actions/composite/run-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
         with:
+          system: x86_64-linux
+          github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
           run: |
-            echo "🔍 Validating OpenTofu configuration..."
+            echo "Validating OpenTofu configuration..."
             cd "${MODULE_HOME}"
-            if ! tofu validate;
-            then
-              echo "❌ OpenTofu validation failed!"
+            if ! tofu validate; then
+              echo "OpenTofu validation failed!"
               exit 1
             fi
-            echo "✅ OpenTofu validation passed"
+            echo "OpenTofu validation passed"
 
       - id: opentofu_security_scan
         name: OpenTofu Security Scan
-        uses: tars-cloud/actions/composite/run-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
         with:
+          system: x86_64-linux
+          github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
           run: |
-            echo "🔒 Running security scan..."
-            if command -v trivy &> /dev/null;
-            then
-              if ! trivy fs --scanners vuln,secret --exit-code 1 "${MODULE_HOME}";
-              then
-                echo "❌ Security scan found issues!"
+            echo "Running security scan..."
+            if command -v trivy &> /dev/null; then
+              if ! trivy fs --scanners vuln,secret --exit-code 1 "${MODULE_HOME}"; then
+                echo "Security scan found issues!"
                 exit 1
               fi
-              echo "✅ Security scan passed"
+              echo "Security scan passed"
             else
-              echo "⚠️ Trivy not available, security scan failed"
+              echo "Trivy not available, security scan failed"
               exit 1
             fi
 
       - id: opentofu_lint
         name: OpenTofu Lint
-        uses: tars-cloud/actions/composite/run-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
         with:
+          system: x86_64-linux
+          github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
           run: |
-            echo "🧹 Running OpenTofu linting..."
-            if command -v tflint &> /dev/null;
-            then
+            echo "Running OpenTofu linting..."
+            if command -v tflint &> /dev/null; then
               cd "${MODULE_HOME}"
-              if ! tflint --format=compact;
-              then
-                echo "❌ OpenTofu linting failed!"
+              if ! tflint --format=compact; then
+                echo "OpenTofu linting failed!"
                 exit 1
               fi
-              echo "✅ OpenTofu linting passed"
+              echo "OpenTofu linting passed"
             else
-              echo "⚠️ tflint not available, linting failed"
+              echo "tflint not available, linting failed"
               exit 1
             fi
 
       - id: opentofu_test_guard
         name: OpenTofu Test Guard
+        shell: bash
         run: |
-          count=$(find "${MODULE_HOME}" -name '*.tftest.hcl' | wc -l); [ "$count" -gt 0 ] || { echo "no tftest files — see tf-ntnx-lcm/module/tests for the reference pattern"; exit 1; }
+          if [[ -x ./scripts/check-legacy-resources.sh ]]; then
+            count=$(find "${MODULE_HOME}" -name '*.tftest.hcl' | wc -l)
+            if [[ "$count" -le 0 ]]; then
+              echo "::error::No tftest files found in ${MODULE_HOME}"
+              exit 1
+            fi
+          else
+            echo "Test guard not enforced for this repository family; skipping."
+          fi
 
       - id: opentofu_test
         name: OpenTofu Test
-        uses: tars-cloud/actions/composite/run-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
         with:
+          system: x86_64-linux
+          github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
           run: |
-            echo "🧪 Running OpenTofu tests..."
+            echo "Running OpenTofu tests..."
             cd "${MODULE_HOME}"
-            if ! tofu test -verbose;
-            then
-              echo "❌ OpenTofu tests failed!"
+            if ! tofu test -verbose; then
+              echo "OpenTofu tests failed!"
               exit 1
             fi
-            echo "✅ OpenTofu tests passed"
+            echo "OpenTofu tests passed"
 
-      - id: opentofu_status
-        name: OpenTofu Status
+      - id: report_opentofu_status
+        name: Report OpenTofu Module Status
         if: always()
-        run: |
-          echo "=== OpenTofu Module Build Status ==="
-          echo "Init: ${{ steps.opentofu_init.outcome }}"
-          echo "Format: ${{ steps.opentofu_format.outcome }}"
-          echo "Validate: ${{ steps.opentofu_validate.outcome }}"
-          echo "Docs: ${{ steps.opentofu_docs_check.outcome }}"
-          echo "Security: ${{ steps.opentofu_security_scan.outcome }}"
-          echo "Lint: ${{ steps.opentofu_lint.outcome }}"
-          echo "Test: ${{ steps.opentofu_test.outcome }}"
+        uses: tars-cloud/actions/composite/report-status@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        with:
+          title: OpenTofu Module (Test)
+          results: |
+            runner-mode=${{ steps.validate_runner_mode.outcome }}
+            setup=${{ steps.set_up_consumer.outcome }}
+            init=${{ steps.opentofu_init.outcome }}
+            format=${{ steps.opentofu_format.outcome }}
+            docs=${{ steps.opentofu_docs_check.outcome }}
+            legacy-sweep=${{ steps.opentofu_legacy_check.outcome }}
+            validate=${{ steps.opentofu_validate.outcome }}
+            security=${{ steps.opentofu_security_scan.outcome }}
+            lint=${{ steps.opentofu_lint.outcome }}
+            test-guard=${{ steps.opentofu_test_guard.outcome }}
+            test=${{ steps.opentofu_test.outcome }}
+          fail-on-error: "true"
 
-          if [[ \
-            "${{ steps.opentofu_init.outcome }}" == "success" && \
-            "${{ steps.opentofu_format.outcome }}" == "success" && \
-            "${{ steps.opentofu_docs_check.outcome }}" == "success" && \
-            "${{ steps.opentofu_validate.outcome }}" == "success" && \
-            "${{ steps.opentofu_security_scan.outcome }}" == "success" && \
-            "${{ steps.opentofu_lint.outcome }}" == "success" && \
-            "${{ steps.opentofu_test.outcome }}" == "success" \
-          ]]; \
-          then
-            echo "STATUS=success" >> "$GITHUB_OUTPUT"
-            echo "✅ All OpenTofu checks passed!"
-          else
-            echo "STATUS=failure" >> "$GITHUB_OUTPUT"
-            echo "❌ Some OpenTofu checks failed!"
-          fi
-
-    outputs:
-      status: ${{ steps.opentofu_status.outputs.STATUS }}
-
-  ##################################################
+  # -------------------------------------------------
   # Publish the OpenTofu Module
-  ##################################################
-
+  # -------------------------------------------------
   publish:
     name: OpenTofu Module (Publish)
-
-    runs-on:
-      group: enterprise/bingamon-lab
-      labels: [self-hosted, linux, x64]
-
-    needs: test
-
-    # Only run on releases and if build was successful
-    if: |
+    needs:
+      - test
+    if: >-
       github.event_name == 'release' &&
       needs.test.outputs.status == 'success'
-
+    runs-on: ${{ fromJSON(vars.TARS_CLOUD_RUNNER_TYPE == 'self-hosted' &&
+      (vars.TARS_CLOUD_RUNNER_AMD64 || '["self-hosted","linux","x64"]') ||
+      '"ubuntu-24.04"') }}
     timeout-minutes: 30
     continue-on-error: false
-
     steps:
-      - id: checkout_repository_tag
-        name: Checkout repository tag
-        if: github.event_name == 'release'
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.release.tag_name }}
-          lfs: false
-          submodules: recursive
+      - id: validate_runner_mode
+        name: Validate Runner Mode
+        shell: bash
+        env:
+          RUNNER_MODE: ${{ vars.TARS_CLOUD_RUNNER_TYPE }}
+        run: |
+          case "$RUNNER_MODE" in
+            ""|saas|self-hosted) ;;
+            *) echo "::error::TARS_CLOUD_RUNNER_TYPE must be saas or self-hosted."; exit 1 ;;
+          esac
 
-      - id: setup_devenv
-        name: Set up devenv
-        uses: tars-cloud/actions/composite/setup-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+      - id: set_up_consumer
+        name: Set Up Consumer
+        uses: tars-cloud/actions/composite/setup-consumer@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        with:
+          debug: "false"
+          ref: ${{ github.event.release.tag_name }}
+          lfs: "false"
+          submodules: recursive
+          tools: none
+          system: x86_64-linux
+          warmup: "false"
 
       - id: extract_version
-        name: Extract version from release
+        name: Extract Version from Release
+        shell: bash
         run: |
           VERSION=${{ github.event.release.tag_name }}
           VERSION_STRIPPED=${VERSION#v}
           echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "VERSION_STRIPPED=${VERSION_STRIPPED}" >> "$GITHUB_OUTPUT"
-          echo "📦 Publishing module version: ${VERSION_STRIPPED}"
-          echo "🏷️  Release name: ${{ github.event.release.name }}"
-          echo "🔗 Release URL: ${{ github.event.release.html_url }}"
+          echo "Publishing module version: ${VERSION_STRIPPED}"
 
       - id: create_package
-        name: Create module package
-        uses: tars-cloud/actions/composite/run-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        name: Create Module Package
+        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
         with:
+          system: x86_64-linux
+          github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
           run: |
-            echo "📦 Creating module package..."
-
-            # Create a clean package of the module
             PACKAGE_NAME="${{ env.PROJECT }}-${{ steps.extract_version.outputs.VERSION_STRIPPED }}"
-
-            # Copy module files
             PACKAGE_ROOT=$(mktemp -d "${RUNNER_TEMP}/module-package.XXXXXX")
             mkdir -p "${PACKAGE_ROOT}/${PACKAGE_NAME}"
             cp -r "${MODULE_HOME}"/* "${PACKAGE_ROOT}/${PACKAGE_NAME}/"
-
-            # Create tarball
             tar -czf "${PACKAGE_ROOT}/${PACKAGE_NAME}.tar.gz" -C "${PACKAGE_ROOT}" "${PACKAGE_NAME}"
-
             jq -n --arg path "${PACKAGE_ROOT}/${PACKAGE_NAME}.tar.gz" --arg name "$PACKAGE_NAME" \
               '{PACKAGE_PATH: $path, PACKAGE_NAME: $name}' > "$DEVENV_RESULT_FILE"
-            echo "✅ Package created: ${PACKAGE_NAME}.tar.gz"
-            ls -la "${PACKAGE_ROOT}/${PACKAGE_NAME}"
+            echo "Package created: ${PACKAGE_NAME}.tar.gz"
 
       - id: publish_artifactory
         name: Publish to Artifactory
         if: vars.ARTIFACTORY_URL != '' && steps.create_package.outcome == 'success'
-        uses: tars-cloud/actions/composite/run-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
         env:
           ARTIFACTORY_URL: ${{ vars.ARTIFACTORY_URL }}
           ARTIFACTORY_TOKEN: ${{ secrets.ARTIFACTORY_TOKEN }}
         with:
+          system: x86_64-linux
+          github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
           run: |
-            echo "🚀 Publishing to Artifactory..."
-            echo "URL: ${ARTIFACTORY_URL}"
-
             PACKAGE_PATH="${{ fromJSON(steps.create_package.outputs.result || '{}').PACKAGE_PATH }}"
             PACKAGE_NAME="${{ fromJSON(steps.create_package.outputs.result || '{}').PACKAGE_NAME }}"
-
-            if [[ "${ARTIFACTORY_TOKEN:-EMPTY}" == "EMPTY" ]];
-            then
-              echo "❌ ARTIFACTORY_TOKEN secret not configured!"
+            if [[ "${ARTIFACTORY_TOKEN:-EMPTY}" == "EMPTY" ]]; then
+              echo "ARTIFACTORY_TOKEN secret not configured!"
               exit 1
             fi
+            curl --fail --header "X-JFrog-Art-Api:${ARTIFACTORY_TOKEN}" \
+              --upload-file "${PACKAGE_PATH}" \
+              "${ARTIFACTORY_URL}/terraform-modules/${PACKAGE_NAME}.tar.gz"
 
-            # Upload to Artifactory
-            curl  --fail --header "X-JFrog-Art-Api:${ARTIFACTORY_TOKEN}" \
-            --upload-file "${PACKAGE_PATH}" \
-            "${ARTIFACTORY_URL}/terraform-modules/${PACKAGE_NAME}.tar.gz" || {
-              echo "❌ Failed to upload to Artifactory!"
-              exit 1
-            }
-
-            echo "✅ Successfully published to Artifactory"
-
-      - id: publish_status
-        name: Publish Status
+      - id: report_publish_status
+        name: Report Publish Status
         if: always()
-        run: |
-          if [[ "${{ steps.publish_artifactory.outcome }}" == "success" ]]; then
-            echo "✅ Module published successfully!"
-            echo "📦 Version: ${{ steps.extract_version.outputs.VERSION_STRIPPED }}"
-          else
-            echo "❌ Module publishing failed!"
-            exit 1
-          fi
+        uses: tars-cloud/actions/composite/report-status@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        with:
+          title: OpenTofu Module (Publish)
+          results: |
+            runner-mode=${{ steps.validate_runner_mode.outcome }}
+            setup=${{ steps.set_up_consumer.outcome }}
+            extract-version=${{ steps.extract_version.outcome }}
+            create-package=${{ steps.create_package.outcome }}
+            publish-artifactory=${{ steps.publish_artifactory.outcome }}
+          allow-skipped: |
+            publish-artifactory
+          fail-on-error: "true"

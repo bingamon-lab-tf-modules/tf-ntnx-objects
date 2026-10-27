@@ -1,15 +1,10 @@
 ---
-##################################################
-# Name: update.yaml
-# Description: Workflow for Updating Developer Environment
-##################################################
-
-name: Devenv Update
+name: "Consumer: Devenv Update"
 
 # prettier-ignore
 on:  # yamllint disable-line rule:truthy
   schedule:
-    - cron: "0 0 * * 0"
+    - cron: "17 3 * * 0"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -18,17 +13,23 @@ on:  # yamllint disable-line rule:truthy
         default: false
 
 concurrency:
-  group: devenv-update-lock
+  group: devenv-update
   cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
+  # -------------------------------------------------
+  # Update Devenv Dependencies
+  # -------------------------------------------------
   update:
-    uses: tars-cloud/actions/.github/workflows/consumer-devenv-update.yaml@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+    name: Update Devenv Dependencies
+    uses: tars-cloud/actions/.github/workflows/consumer-devenv-update.yaml@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
     with:
-      runs-on: '{"group":"enterprise/bingamon-lab","labels":["self-hosted","linux","x64"]}'
+      debug: false
+      runner-architecture: AMD64
+      type: devenv
       submodules: true
       branch: update-devenv-lock
       title: "chore: Update devenv.lock"
@@ -37,5 +38,6 @@ jobs:
       reviewers: MAHDTech
       dry-run: ${{ inputs.dry_run || false }}
     secrets:
+      client-id: ${{ secrets.CI_APP_CLIENT_ID }}
       app-id: ${{ secrets.CI_APP_ID }}
       app-private-key: ${{ secrets.CI_APP_PRIVATE_KEY }}

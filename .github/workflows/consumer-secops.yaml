@@ -1,0 +1,58 @@
+---
+name: "Consumer: SecOps"
+
+# prettier-ignore
+on:  # yamllint disable-line rule:truthy
+  push:
+    branches:
+      - main
+      - master
+      - trunk
+  pull_request:
+    branches:
+      - main
+      - master
+      - trunk
+  schedule:
+    - cron: "17 3 * * 0"
+  workflow_dispatch: {}
+
+concurrency:
+  group: secops-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+  statuses: write
+
+jobs:
+  # -------------------------------------------------
+  # Trivy Scan
+  # -------------------------------------------------
+  trivy:
+    name: Trivy Scan
+    uses: tars-cloud/actions/.github/workflows/consumer-trivy.yaml@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+    with:
+      debug: false
+      runner-architecture: AMD64
+      type: devenv
+      timeout-minutes: 60
+      submodules: true
+      config-file: auto
+      fail-on-findings: false
+      publish-status: true
+      status-context: Trivy
+
+  # -------------------------------------------------
+  # CodeQL Analysis
+  # -------------------------------------------------
+  codeql:
+    name: CodeQL Analysis
+    uses: tars-cloud/actions/.github/workflows/consumer-codeql.yaml@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+    with:
+      debug: false
+      runner-architecture: AMD64
+      type: devenv
+      languages: '["actions"]'

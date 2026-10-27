@@ -1,29 +1,26 @@
 ---
-##################################################
-# Name: semver.yaml
-# Description: Workflow for Semantic Versioning
-##################################################
-
-name: Semantic Versioning
+name: "Consumer: Semantic Versioning"
 
 # prettier-ignore
 on:  # yamllint disable-line rule:truthy
-  # Dry Run (Pull Request)
   pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+      - unlabeled
     branches:
       - main
       - master
       - trunk
       - candidate # Release Candidates
-  # Release (Push)
   push:
     branches:
       - main
       - master
       - trunk
       - candidate # Release Candidates
-  # Manual Trigger
   workflow_dispatch:
     inputs:
       changelog_tool:
@@ -40,27 +37,21 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
+  actions: read
   contents: write
   packages: write
   pull-requests: read
   statuses: write
 
 env:
-  # GitHub
   PROJECT: ${{ github.repository }}
   BRANCH_NAME_CURRENT: ${{ github.head_ref || github.ref_name }}
   BRANCH_NAME_DEFAULT: ${{ github.event.repository.default_branch }}
-
-  # Nix
   NIXPKGS_ALLOW_UNFREE: 1
   CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
   CI: "true"
   SECRETSPEC_PROVIDER: env
   SECRETSPEC_REASON: ci-workflow
-
-  # Semantic Versioning changelog tool (convco or github)
-  # - Use convco for conventional commits
-  # - Or use GitHub for auto-generated changelog from PRs
   SEMVER_CHANGELOG_TOOL: ${{ vars.SEMVER_CHANGELOG_TOOL || 'github' }}
 
 defaults:
@@ -68,37 +59,47 @@ defaults:
     shell: bash
 
 jobs:
-  ##################################################
+  # -------------------------------------------------
   # Determine Semantic Version
-  ##################################################
-
+  # -------------------------------------------------
   semantic-version:
     name: Semantic Version
-
-    # Runs on pull request and push events
     if: |
       github.event_name == 'pull_request' ||
       github.event_name == 'push'
-
-    runs-on:
-      group: enterprise/bingamon-lab
-      labels: [self-hosted, linux, x64]
-
+    runs-on: ${{ fromJSON(vars.TARS_CLOUD_RUNNER_TYPE == 'self-hosted' &&
+      (vars.TARS_CLOUD_RUNNER_AMD64 || '["self-hosted","linux","x64"]') ||
+      '"ubuntu-24.04"') }}
     timeout-minutes: 15
     continue-on-error: false
-
+    outputs:
+      semver: ${{ steps.calculate_semver.outputs.semver }}
+      tag: ${{ steps.calculate_semver.outputs.tag }}
+      version-bump: ${{ steps.calculate_semver.outputs.version-bump }}
+      version-type: ${{ steps.calculate_semver.outputs.version-type }}
+      is-candidate: ${{ steps.calculate_semver.outputs.is-candidate }}
     steps:
+      - id: validate_runner_mode
+        name: Validate Runner Mode
+        shell: bash
+        env:
+          RUNNER_MODE: ${{ vars.TARS_CLOUD_RUNNER_TYPE }}
+        run: |
+          case "$RUNNER_MODE" in
+            ""|saas|self-hosted) ;;
+            *) echo "::error::TARS_CLOUD_RUNNER_TYPE must be saas or self-hosted."; exit 1 ;;
+          esac
+
       - id: checkout_repository
-        name: Checkout repository
+        name: Checkout Repository
         uses: actions/checkout@v7
         with:
           lfs: false
           submodules: recursive
           fetch-depth: 0
 
-      # Obtain the PR and extract the semver labels.
       - id: extract_labels
-        name: Extract labels
+        name: Extract Labels
         uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -234,7 +235,7 @@ jobs:
             };
 
       - id: get_latest_tag
-        name: Get latest tag
+        name: Get Latest Tag
         run: |
           # Get the latest tag or default to v0.0.0
           LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
@@ -242,7 +243,7 @@ jobs:
           echo "✅ Latest tag: ${LATEST_TAG}"
 
       - id: calculate_semver
-        name: Calculate semantic version
+        name: Calculate Semantic Version
         uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -314,37 +315,36 @@ jobs:
               isCandidate: labelInfo.isCandidate
             };
 
-    outputs:
-      semver: ${{ steps.calculate_semver.outputs.semver }}
-      tag: ${{ steps.calculate_semver.outputs.tag }}
-      version-bump: ${{ steps.calculate_semver.outputs.version-bump }}
-      version-type: ${{ steps.calculate_semver.outputs.version-type }}
-      is-candidate: ${{ steps.calculate_semver.outputs.is-candidate }}
-
-  ##################################################
+  # -------------------------------------------------
   # Create Git Tag
-  ##################################################
-
+  # -------------------------------------------------
   tag:
     name: Create Tag
-
-    # Only run on push events
     if: github.event_name == 'push' &&
       needs.semantic-version.outputs.version-bump == 'true'
-
-    runs-on:
-      group: enterprise/bingamon-lab
-      labels: [self-hosted, linux, x64]
-
+    runs-on: ${{ fromJSON(vars.TARS_CLOUD_RUNNER_TYPE == 'self-hosted' &&
+      (vars.TARS_CLOUD_RUNNER_AMD64 || '["self-hosted","linux","x64"]') ||
+      '"ubuntu-24.04"') }}
     needs:
       - semantic-version
-
     timeout-minutes: 15
     continue-on-error: false
-
+    outputs:
+      tag-created: "true"
     steps:
+      - id: validate_runner_mode
+        name: Validate Runner Mode
+        shell: bash
+        env:
+          RUNNER_MODE: ${{ vars.TARS_CLOUD_RUNNER_TYPE }}
+        run: |
+          case "$RUNNER_MODE" in
+            ""|saas|self-hosted) ;;
+            *) echo "::error::TARS_CLOUD_RUNNER_TYPE must be saas or self-hosted."; exit 1 ;;
+          esac
+
       - id: checkout_repository
-        name: Checkout repository
+        name: Checkout Repository
         uses: actions/checkout@v7
         with:
           lfs: false
@@ -352,7 +352,7 @@ jobs:
           fetch-depth: 0
 
       - id: check_existing_tag
-        name: Check if tag already exists
+        name: Check If Tag Already Exists
         env:
           TAG_NAME: ${{ needs.semantic-version.outputs.tag }}
         run: |
@@ -368,7 +368,7 @@ jobs:
           fi
 
       - id: create_tag
-        name: Create and push tag
+        name: Create and Push Tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ needs.semantic-version.outputs.tag }}
@@ -389,54 +389,62 @@ jobs:
 
           echo "✅ Successfully created and pushed tag: ${TAG_NAME}"
 
-    outputs:
-      tag-created: "true"
-
-  ##################################################
+  # -------------------------------------------------
   # Create GitHub Release
-  ##################################################
-
+  # -------------------------------------------------
   release:
     name: Create Release
-
-    # Only run on push events, if version bump is needed, and if the tag was created
     if: |
       github.event_name == 'push' &&
       needs.semantic-version.outputs.version-bump == 'true' &&
       needs.tag.outputs.tag-created == 'true'
-
-    runs-on:
-      group: enterprise/bingamon-lab
-      labels: [self-hosted, linux, x64]
-
+    runs-on: ${{ fromJSON(vars.TARS_CLOUD_RUNNER_TYPE == 'self-hosted' &&
+      (vars.TARS_CLOUD_RUNNER_AMD64 || '["self-hosted","linux","x64"]') ||
+      '"ubuntu-24.04"') }}
     needs:
       - semantic-version
       - tag
-
     timeout-minutes: 15
     continue-on-error: false
-
+    outputs:
+      release-url: ${{ steps.create_release.outputs.release-url }}
+      release-id: ${{ steps.create_release.outputs.release-id }}
+      release-tag: ${{ steps.create_release.outputs.release-tag }}
+      release-name: ${{ steps.create_release.outputs.release-name }}
     steps:
-      - id: checkout_repository
-        name: Checkout repository
-        uses: actions/checkout@v7
-        with:
-          lfs: false
-          submodules: recursive
-          fetch-depth: 0 # Need full history for convco
+      - id: validate_runner_mode
+        name: Validate Runner Mode
+        shell: bash
+        env:
+          RUNNER_MODE: ${{ vars.TARS_CLOUD_RUNNER_TYPE }}
+        run: |
+          case "$RUNNER_MODE" in
+            ""|saas|self-hosted) ;;
+            *) echo "::error::TARS_CLOUD_RUNNER_TYPE must be saas or self-hosted."; exit 1 ;;
+          esac
 
-      - id: setup_devenv
-        name: Set up devenv
-        uses: tars-cloud/actions/composite/setup-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+      - id: set_up_consumer
+        name: Set Up Consumer
+        uses: tars-cloud/actions/composite/setup-consumer@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        with:
+          debug: "false"
+          fetch-depth: "0"
+          lfs: "false"
+          submodules: recursive
+          tools: none
+          system: x86_64-linux
+          warmup: "false"
 
       - id: generate_changelog
-        name: Generate changelog with convco
+        name: Generate Changelog with convco
         if: |
           (github.event.inputs.changelog_tool == 'convco') ||
           (github.event.inputs.changelog_tool == null && vars.SEMVER_CHANGELOG_TOOL == 'convco') ||
           (github.event.inputs.changelog_tool == null && vars.SEMVER_CHANGELOG_TOOL == null && env.SEMVER_CHANGELOG_TOOL == 'convco')
-        uses: tars-cloud/actions/composite/run-devenv@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
         with:
+          system: x86_64-linux
+          github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
           run: |
             echo "📝 Generating changelog..."
 
@@ -498,7 +506,7 @@ jobs:
             fi
 
       - id: create_release
-        name: Create GitHub release
+        name: Create GitHub Release
         uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -647,39 +655,39 @@ jobs:
               name: release.name
             };
 
-    outputs:
-      release-url: ${{ steps.create_release.outputs.release-url }}
-      release-id: ${{ steps.create_release.outputs.release-id }}
-      release-tag: ${{ steps.create_release.outputs.release-tag }}
-      release-name: ${{ steps.create_release.outputs.release-name }}
-
-  ##################################################
+  # -------------------------------------------------
   # Report Status
-  ##################################################
-
+  # -------------------------------------------------
   status:
     name: Report Status
-
-    runs-on:
-      group: enterprise/bingamon-lab
-      labels: [self-hosted, linux, x64]
-
+    runs-on: ${{ fromJSON(vars.TARS_CLOUD_RUNNER_TYPE == 'self-hosted' &&
+      (vars.TARS_CLOUD_RUNNER_AMD64 || '["self-hosted","linux","x64"]') ||
+      '"ubuntu-24.04"') }}
     needs:
       - semantic-version
       - tag
       - release
-
     if: always()
-
     timeout-minutes: 10
     continue-on-error: true
-
     steps:
+      - id: validate_runner_mode
+        name: Validate Runner Mode
+        shell: bash
+        env:
+          RUNNER_MODE: ${{ vars.TARS_CLOUD_RUNNER_TYPE }}
+        run: |
+          case "$RUNNER_MODE" in
+            ""|saas|self-hosted) ;;
+            *) echo "::error::TARS_CLOUD_RUNNER_TYPE must be saas or self-hosted."; exit 1 ;;
+          esac
+
       - id: report_status
-        name: Report semantic versioning status
+        name: Report Semantic Versioning Status
         if: always()
-        uses: tars-cloud/actions/composite/report-status@de946ad3f732657100a3b7e6262baee5bb2d2b0a # v3.0.1
+        uses: tars-cloud/actions/composite/report-status@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
         with:
+          title: Semantic Versioning
           results: |
             semantic-version=${{ needs.semantic-version.result }}
             tag=${{ needs.tag.result }}
