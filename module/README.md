@@ -29,8 +29,8 @@ so resizing means destroy and recreate.
 
 | Name | Version |
 | ---- | ------- |
-| <a name="provider_local"></a> [local](#provider\_local) | 2.9.0 |
-| <a name="provider_nutanix"></a> [nutanix](#provider\_nutanix) | 2.4.2 |
+| <a name="provider_local"></a> [local](#provider\_local) | 2.9.1 |
+| <a name="provider_nutanix"></a> [nutanix](#provider\_nutanix) | 2.5.0 |
 
 ## Modules
 
