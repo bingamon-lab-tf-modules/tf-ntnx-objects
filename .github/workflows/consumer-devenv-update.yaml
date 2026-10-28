@@ -30,6 +30,7 @@ jobs:
       debug: false
       runner-architecture: AMD64
       type: devenv
+      timeout-minutes: 120
       submodules: true
       branch: update-devenv-lock
       title: "chore: Update devenv.lock"

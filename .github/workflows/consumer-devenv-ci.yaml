@@ -35,6 +35,7 @@ jobs:
       runner-architecture: AMD64
       job-name: Devenv CI - AMD64
       type: devenv
+      timeout-minutes: 120
       submodules: true
       lint-command: prek run --all-files --show-diff-on-failure
     secrets:
