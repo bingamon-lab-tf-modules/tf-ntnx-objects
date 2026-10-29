@@ -95,3 +95,7 @@ prek
 Velero
 COSI
 footgun
+SecretSpec
+mktemp
+esac
+secops

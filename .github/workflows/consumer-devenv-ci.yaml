@@ -1,0 +1,47 @@
+---
+name: "Consumer: Devenv CI"
+
+# prettier-ignore
+on:  # yamllint disable-line rule:truthy
+  pull_request:
+    branches:
+      - main
+      - master
+      - trunk
+  push:
+    branches:
+      - main
+      - master
+      - trunk
+  workflow_dispatch: {}
+
+concurrency:
+  group: devenv-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  # -------------------------------------------------
+  # Consumer CI
+  # -------------------------------------------------
+  ci:
+    name: Consumer CI - AMD64
+    uses: tars-cloud/actions/.github/workflows/consumer-devenv-ci.yaml@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+    with:
+      debug: false
+      runner-architecture: AMD64
+      job-name: Devenv CI - AMD64
+      type: devenv
+      timeout-minutes: 120
+      submodules: true
+      lint-command: prek run --all-files --show-diff-on-failure
+    secrets:
+      S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+      S3_BUCKET: ${{ secrets.S3_BUCKET }}
+      S3_REGION: ${{ secrets.S3_REGION }}
+      S3_ACCESS_KEY: ${{ secrets.S3_ACCESS_KEY }}
+      S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+      S3_SESSION_TOKEN: ${{ secrets.S3_SESSION_TOKEN }}

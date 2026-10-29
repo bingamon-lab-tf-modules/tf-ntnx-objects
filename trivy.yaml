@@ -38,7 +38,9 @@ scan:
   detection-priority: precise
   scanners:
     - vuln
+    - misconfig
     - secret
+    - license
   skip-files:
     - .env
   skip-dirs:

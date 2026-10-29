@@ -1,28 +1,26 @@
 ---
-##################################################
-# Name: semver.yaml
-# Description: Workflow for Semantic Versioning
-##################################################
-
-name: Semantic Versioning
+name: "Consumer: Semantic Versioning"
 
 # prettier-ignore
 on:  # yamllint disable-line rule:truthy
-  # Dry Run (Pull Request)
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+      - unlabeled
     branches:
       - main
       - master
       - trunk
       - candidate # Release Candidates
-  # Release (Push)
   push:
     branches:
       - main
       - master
       - trunk
       - candidate # Release Candidates
-  # Manual Trigger
   workflow_dispatch:
     inputs:
       changelog_tool:
@@ -39,23 +37,21 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
+  actions: read
   contents: write
   packages: write
   pull-requests: read
   statuses: write
 
 env:
-  # GitHub
   PROJECT: ${{ github.repository }}
   BRANCH_NAME_CURRENT: ${{ github.head_ref || github.ref_name }}
   BRANCH_NAME_DEFAULT: ${{ github.event.repository.default_branch }}
-
-  # Nix
   NIXPKGS_ALLOW_UNFREE: 1
-
-  # Semantic Versioning changelog tool (convco or github)
-  # - Use convco for conventional commits
-  # - Or use GitHub for auto-generated changelog from PRs
+  CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+  CI: "true"
+  SECRETSPEC_PROVIDER: env
+  SECRETSPEC_REASON: ci-workflow
   SEMVER_CHANGELOG_TOOL: ${{ vars.SEMVER_CHANGELOG_TOOL || 'github' }}
 
 defaults:
@@ -63,41 +59,47 @@ defaults:
     shell: bash
 
 jobs:
-  ##################################################
+  # -------------------------------------------------
   # Determine Semantic Version
-  ##################################################
-
+  # -------------------------------------------------
   semantic-version:
     name: Semantic Version
-
-    # Runs on pull request and push events
     if: |
       github.event_name == 'pull_request' ||
       github.event_name == 'push'
-
-    runs-on: ${{ matrix.os }}
-
-    timeout-minutes: 15
+    runs-on: ${{ fromJSON(vars.TARS_CLOUD_RUNNER_TYPE == 'self-hosted' &&
+      (vars.TARS_CLOUD_RUNNER_AMD64 || '["self-hosted","linux","x64"]') ||
+      '"ubuntu-24.04"') }}
+    timeout-minutes: 30
     continue-on-error: false
-
-    strategy:
-      fail-fast: true
-      matrix:
-        os:
-          - ubuntu-latest
-
+    outputs:
+      semver: ${{ steps.calculate_semver.outputs.semver }}
+      tag: ${{ steps.calculate_semver.outputs.tag }}
+      version-bump: ${{ steps.calculate_semver.outputs.version-bump }}
+      version-type: ${{ steps.calculate_semver.outputs.version-type }}
+      is-candidate: ${{ steps.calculate_semver.outputs.is-candidate }}
     steps:
+      - id: validate_runner_mode
+        name: Validate Runner Mode
+        shell: bash
+        env:
+          RUNNER_MODE: ${{ vars.TARS_CLOUD_RUNNER_TYPE }}
+        run: |
+          case "$RUNNER_MODE" in
+            ""|saas|self-hosted) ;;
+            *) echo "::error::TARS_CLOUD_RUNNER_TYPE must be saas or self-hosted."; exit 1 ;;
+          esac
+
       - id: checkout_repository
-        name: Checkout repository
+        name: Checkout Repository
         uses: actions/checkout@v7
         with:
           lfs: false
           submodules: recursive
           fetch-depth: 0
 
-      # Obtain the PR and extract the semver labels.
       - id: extract_labels
-        name: Extract labels
+        name: Extract Labels
         uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -233,7 +235,7 @@ jobs:
             };
 
       - id: get_latest_tag
-        name: Get latest tag
+        name: Get Latest Tag
         run: |
           # Get the latest tag or default to v0.0.0
           LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
@@ -241,7 +243,7 @@ jobs:
           echo "✅ Latest tag: ${LATEST_TAG}"
 
       - id: calculate_semver
-        name: Calculate semantic version
+        name: Calculate Semantic Version
         uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -313,41 +315,36 @@ jobs:
               isCandidate: labelInfo.isCandidate
             };
 
-    outputs:
-      semver: ${{ steps.calculate_semver.outputs.semver }}
-      tag: ${{ steps.calculate_semver.outputs.tag }}
-      version-bump: ${{ steps.calculate_semver.outputs.version-bump }}
-      version-type: ${{ steps.calculate_semver.outputs.version-type }}
-      is-candidate: ${{ steps.calculate_semver.outputs.is-candidate }}
-
-  ##################################################
+  # -------------------------------------------------
   # Create Git Tag
-  ##################################################
-
+  # -------------------------------------------------
   tag:
     name: Create Tag
-
-    # Only run on push events
     if: github.event_name == 'push' &&
       needs.semantic-version.outputs.version-bump == 'true'
-
-    runs-on: ${{ matrix.os }}
-
+    runs-on: ${{ fromJSON(vars.TARS_CLOUD_RUNNER_TYPE == 'self-hosted' &&
+      (vars.TARS_CLOUD_RUNNER_AMD64 || '["self-hosted","linux","x64"]') ||
+      '"ubuntu-24.04"') }}
     needs:
       - semantic-version
-
-    timeout-minutes: 15
+    timeout-minutes: 30
     continue-on-error: false
-
-    strategy:
-      fail-fast: true
-      matrix:
-        os:
-          - ubuntu-latest
-
+    outputs:
+      tag-created: "true"
     steps:
+      - id: validate_runner_mode
+        name: Validate Runner Mode
+        shell: bash
+        env:
+          RUNNER_MODE: ${{ vars.TARS_CLOUD_RUNNER_TYPE }}
+        run: |
+          case "$RUNNER_MODE" in
+            ""|saas|self-hosted) ;;
+            *) echo "::error::TARS_CLOUD_RUNNER_TYPE must be saas or self-hosted."; exit 1 ;;
+          esac
+
       - id: checkout_repository
-        name: Checkout repository
+        name: Checkout Repository
         uses: actions/checkout@v7
         with:
           lfs: false
@@ -355,7 +352,7 @@ jobs:
           fetch-depth: 0
 
       - id: check_existing_tag
-        name: Check if tag already exists
+        name: Check If Tag Already Exists
         env:
           TAG_NAME: ${{ needs.semantic-version.outputs.tag }}
         run: |
@@ -371,7 +368,7 @@ jobs:
           fi
 
       - id: create_tag
-        name: Create and push tag
+        name: Create and Push Tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ needs.semantic-version.outputs.tag }}
@@ -392,137 +389,124 @@ jobs:
 
           echo "✅ Successfully created and pushed tag: ${TAG_NAME}"
 
-    outputs:
-      tag-created: "true"
-
-  ##################################################
+  # -------------------------------------------------
   # Create GitHub Release
-  ##################################################
-
+  # -------------------------------------------------
   release:
     name: Create Release
-
-    # Only run on push events, if version bump is needed, and if the tag was created
     if: |
       github.event_name == 'push' &&
       needs.semantic-version.outputs.version-bump == 'true' &&
       needs.tag.outputs.tag-created == 'true'
-
-    runs-on: ${{ matrix.os }}
-
+    runs-on: ${{ fromJSON(vars.TARS_CLOUD_RUNNER_TYPE == 'self-hosted' &&
+      (vars.TARS_CLOUD_RUNNER_AMD64 || '["self-hosted","linux","x64"]') ||
+      '"ubuntu-24.04"') }}
     needs:
       - semantic-version
       - tag
-
-    timeout-minutes: 15
+    timeout-minutes: 30
     continue-on-error: false
-
-    strategy:
-      fail-fast: true
-      matrix:
-        os:
-          - ubuntu-latest
-
+    outputs:
+      release-url: ${{ steps.create_release.outputs.release-url }}
+      release-id: ${{ steps.create_release.outputs.release-id }}
+      release-tag: ${{ steps.create_release.outputs.release-tag }}
+      release-name: ${{ steps.create_release.outputs.release-name }}
     steps:
-      - id: checkout_repository
-        name: Checkout repository
-        uses: actions/checkout@v7
-        with:
-          lfs: false
-          submodules: recursive
-          fetch-depth: 0 # Need full history for convco
-
-      - id: install_nix
-        name: "Install Nix ❄️"
-        uses: cachix/install-nix-action@v31
-        with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-          enable_kvm: true
-
-      - id: cachix
-        name: "Enable Cachix ❄️"
-        uses: cachix/cachix-action@v17
-        if: vars.CACHIX_CACHE_NAME != ''
-        with:
-          name: ${{ vars.CACHIX_CACHE_NAME }}
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          useDaemon: true
-          skipPush: false
-
-      - id: devenv_install
-        name: Devenv install
+      - id: validate_runner_mode
+        name: Validate Runner Mode
+        shell: bash
+        env:
+          RUNNER_MODE: ${{ vars.TARS_CLOUD_RUNNER_TYPE }}
         run: |
-          nix profile install --accept-flake-config nixpkgs#devenv
+          case "$RUNNER_MODE" in
+            ""|saas|self-hosted) ;;
+            *) echo "::error::TARS_CLOUD_RUNNER_TYPE must be saas or self-hosted."; exit 1 ;;
+          esac
+
+      - id: set_up_consumer
+        name: Set Up Consumer
+        uses: tars-cloud/actions/composite/setup-consumer@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        with:
+          debug: "false"
+          fetch-depth: "0"
+          lfs: "false"
+          submodules: recursive
+          tools: none
+          system: x86_64-linux
+          warmup: "false"
 
       - id: generate_changelog
-        name: Generate changelog with convco
+        name: Generate Changelog with convco
         if: |
           (github.event.inputs.changelog_tool == 'convco') ||
           (github.event.inputs.changelog_tool == null && vars.SEMVER_CHANGELOG_TOOL == 'convco') ||
           (github.event.inputs.changelog_tool == null && vars.SEMVER_CHANGELOG_TOOL == null && env.SEMVER_CHANGELOG_TOOL == 'convco')
-        shell: devenv --no-tui shell --quiet bash -- -e {0}
-        run: |
-          echo "📝 Generating changelog..."
+        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        with:
+          system: x86_64-linux
+          github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
+          run: |
+            echo "📝 Generating changelog..."
 
-          CHANGELOG_FILE="/tmp/changelog.md"
-          echo "CHANGELOG_FILE=${CHANGELOG_FILE}" >> "$GITHUB_OUTPUT"
+            CHANGELOG_FILE="${RUNNER_TEMP}/changelog.md"
+            jq -n --arg path "$CHANGELOG_FILE" '{CHANGELOG_FILE: $path}' > "$DEVENV_RESULT_FILE"
 
-          # Get the current tag that was just created and strip the 'v' prefix
-          CURRENT_TAG="${{ needs.semantic-version.outputs.tag }}"
-          CURRENT_TAG_STRIPPED="$(echo ${CURRENT_TAG} | sed 's/^v//')"
-          echo "Current tag: ${CURRENT_TAG}"
-          echo "Version (stripped): ${CURRENT_TAG_STRIPPED}"
+            # Get the current tag that was just created and strip the 'v' prefix
+            CURRENT_TAG="${{ needs.semantic-version.outputs.tag }}"
+            CURRENT_TAG_STRIPPED="$(echo ${CURRENT_TAG} | sed 's/^v//')"
+            echo "Current tag: ${CURRENT_TAG}"
+            echo "Version (stripped): ${CURRENT_TAG_STRIPPED}"
 
-          # Find the previous tag (excluding the current one that was just created)
-          PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -v "^${CURRENT_TAG}$" | head -n 1)
-          PREVIOUS_TAG_STRIPPED="$(echo ${PREVIOUS_TAG} | sed 's/^v//')"
+            # Find the previous tag (excluding the current one that was just created)
+            PREVIOUS_TAG=$(git tag --sort=-version:refname | awk -v current="$CURRENT_TAG" '$0 != current && !found { print; found = 1 }')
+            PREVIOUS_TAG_STRIPPED="$(echo ${PREVIOUS_TAG} | sed 's/^v//')"
 
-          # Initialize changelog file (overwrite any existing content)
-          echo "" > "${CHANGELOG_FILE}"
+            # Initialize changelog file (overwrite any existing content)
+            echo "" > "${CHANGELOG_FILE}"
 
-          if [[ "${PREVIOUS_TAG:-EMPTY}" == "EMPTY" ]];
-          then
-            echo "📋 No previous tag found, generating changelog from beginning"
-
-            # For first release, generate changelog for all commits
-            if convco changelog --unreleased "${CURRENT_TAG_STRIPPED}" > "${CHANGELOG_FILE}" 2>/dev/null;
+            if [[ "${PREVIOUS_TAG:-EMPTY}" == "EMPTY" ]];
             then
-              echo "✅ Generated full changelog with convco"
+              echo "📋 No previous tag found, generating changelog from beginning"
+
+              # For first release, generate changelog for all commits
+              if convco changelog --unreleased "${CURRENT_TAG_STRIPPED}" > "${CHANGELOG_FILE}" 2>/dev/null;
+              then
+                echo "✅ Generated full changelog with convco"
+              else
+                echo "⚠️  convco failed, will use GitHub's built-in release notes instead"
+                echo "" > "${CHANGELOG_FILE}"
+              fi
+
             else
-              echo "⚠️  convco failed, will use GitHub's built-in release notes instead"
-              echo "" > "${CHANGELOG_FILE}"
+              echo "📋 Generating changelog from ${PREVIOUS_TAG} to HEAD"
+
+              # Generate changelog for the range between tags
+              if convco changelog "${PREVIOUS_TAG}..HEAD" --unreleased "${CURRENT_TAG_STRIPPED}" > "${CHANGELOG_FILE}" 2>/dev/null;
+              then
+                echo "✅ Generated diff changelog with convco"
+              else
+                echo "⚠️  convco failed, will use GitHub's built-in release notes instead"
+                echo "" > "${CHANGELOG_FILE}"
+              fi
             fi
 
-          else
-            echo "📋 Generating changelog from ${PREVIOUS_TAG} to HEAD"
+            # Check if changelog was generated successfully
+            CHANGELOG_LINES=$(wc -l < "${CHANGELOG_FILE}" | tr -d ' ')
 
-            # Generate changelog for the range between tags
-            if convco changelog "${PREVIOUS_TAG}..HEAD" --unreleased "${CURRENT_TAG_STRIPPED}" > "${CHANGELOG_FILE}" 2>/dev/null;
+            if [[ "${CHANGELOG_LINES}" -gt 1 ]];
             then
-              echo "✅ Generated diff changelog with convco"
+              echo "✅ Changelog generated successfully"
+              echo "📊 Total lines: ${CHANGELOG_LINES}"
+              echo "📄 Complete changelog content:"
+              echo "===================="
+              cat "${CHANGELOG_FILE}"
+              echo "===================="
             else
-              echo "⚠️  convco failed, will use GitHub's built-in release notes instead"
-              echo "" > "${CHANGELOG_FILE}"
+              echo "⚠️  No meaningful changelog generated (${CHANGELOG_LINES} lines), will use GitHub's built-in release notes instead"
             fi
-          fi
-
-          # Check if changelog was generated successfully
-          CHANGELOG_LINES=$(wc -l < "${CHANGELOG_FILE}" | tr -d ' ')
-
-          if [[ "${CHANGELOG_LINES}" -gt 1 ]];
-          then
-            echo "✅ Changelog generated successfully"
-            echo "📊 Total lines: ${CHANGELOG_LINES}"
-            echo "📄 Complete changelog content:"
-            echo "===================="
-            cat "${CHANGELOG_FILE}"
-            echo "===================="
-          else
-            echo "⚠️  No meaningful changelog generated (${CHANGELOG_LINES} lines), will use GitHub's built-in release notes instead"
-          fi
 
       - id: create_release
-        name: Create GitHub release
+        name: Create GitHub Release
         uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -538,7 +522,7 @@ jobs:
             const isPrerelease = isCandidate;
 
             // Changelog file location (may be empty if convco step was skipped)
-            const changelogFile = '${{ steps.generate_changelog.outputs.CHANGELOG_FILE }}' || '/tmp/changelog.md';
+            const changelogFile = '${{ fromJSON(steps.generate_changelog.outputs.result || '{}').CHANGELOG_FILE }}';
 
             // Determine changelog tool priority:
             // 1. Workflow input (manual trigger)
@@ -671,116 +655,47 @@ jobs:
               name: release.name
             };
 
-    outputs:
-      release-url: ${{ steps.create_release.outputs.release-url }}
-      release-id: ${{ steps.create_release.outputs.release-id }}
-      release-tag: ${{ steps.create_release.outputs.release-tag }}
-      release-name: ${{ steps.create_release.outputs.release-name }}
-
-  ##################################################
+  # -------------------------------------------------
   # Report Status
-  ##################################################
-
+  # -------------------------------------------------
   status:
     name: Report Status
-
-    runs-on: ${{ matrix.os }}
-
+    runs-on: ${{ fromJSON(vars.TARS_CLOUD_RUNNER_TYPE == 'self-hosted' &&
+      (vars.TARS_CLOUD_RUNNER_AMD64 || '["self-hosted","linux","x64"]') ||
+      '"ubuntu-24.04"') }}
     needs:
       - semantic-version
       - tag
       - release
-
     if: always()
-
-    timeout-minutes: 10
+    timeout-minutes: 20
     continue-on-error: true
-
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-
     steps:
-      - id: determine_status
-        name: Determine overall status
+      - id: validate_runner_mode
+        name: Validate Runner Mode
+        shell: bash
+        env:
+          RUNNER_MODE: ${{ vars.TARS_CLOUD_RUNNER_TYPE }}
         run: |
-          echo "=== Workflow Status Summary ==="
-          echo "Semantic Version Job: ${{ needs.semantic-version.result }}"
-          echo "Tag Job: ${{ needs.tag.result }}"
-          echo "Release Job: ${{ needs.release.result }}"
-
-          # Determine overall result
-          if [[ "${{ needs.semantic-version.result }}" == "success" ]];
-          then
-
-            if [[ "${{ github.event_name }}" == "pull_request" ]];
-            then
-              RESULT="success"
-              DESCRIPTION="Semantic version calculated: ${{ needs.semantic-version.outputs.semver || 'N/A' }}"
-            elif [[ "${{ needs.semantic-version.outputs.version-bump }}" == "false" ]];
-            then
-              RESULT="success"
-              VERSION_TYPE="${{ needs.semantic-version.outputs.version-type || 'N/A' }}"
-              DESCRIPTION="No version bump required (${VERSION_TYPE} change)"
-            elif [[ "${{ needs.tag.result }}" == "success" && "${{ needs.release.result }}" == "success" ]];
-            then
-              RESULT="success"
-              TAG="${{ needs.semantic-version.outputs.tag || 'N/A' }}"
-              VERSION_TYPE="${{ needs.semantic-version.outputs.version-type || 'N/A' }}"
-              DESCRIPTION="Successfully created ${VERSION_TYPE} release: ${TAG}"
-            elif [[ "${{ needs.tag.result }}" == "failure" ]];
-            then
-              RESULT="failure"
-              DESCRIPTION="Failed to create git tag"
-            elif [[ "${{ needs.release.result }}" == "failure" ]];
-            then
-              RESULT="failure"
-              DESCRIPTION="Failed to create GitHub release"
-            else
-              RESULT="failure"
-              DESCRIPTION="Unknown failure in tag or release creation"
-            fi
-          else
-            RESULT="failure"
-            DESCRIPTION="Failed to determine semantic version"
-          fi
-
-          echo "RESULT=${RESULT}" >> "$GITHUB_OUTPUT"
-          echo "DESCRIPTION=${DESCRIPTION}" >> "$GITHUB_OUTPUT"
-
-          echo "=== Final Status ==="
-          echo "Result: ${RESULT}"
-          echo "Description: ${DESCRIPTION}"
+          case "$RUNNER_MODE" in
+            ""|saas|self-hosted) ;;
+            *) echo "::error::TARS_CLOUD_RUNNER_TYPE must be saas or self-hosted."; exit 1 ;;
+          esac
 
       - id: report_status
-        name: Report status to GitHub
+        name: Report Semantic Versioning Status
         if: always()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          RESULT="${{ steps.determine_status.outputs.RESULT }}"
-          DESCRIPTION="${{ steps.determine_status.outputs.DESCRIPTION }}"
-
-          # Install gh CLI if not available
-          if ! command -v gh &> /dev/null;
-          then
-            echo "Installing GitHub CLI..."
-            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-            sudo apt update
-            sudo apt install gh -y
-          fi
-
-          gh api \
-            repos/${{ github.repository }}/statuses/${{ github.sha }} \
-            -f state="${RESULT}" \
-            -f context="${{ github.workflow }}" \
-            -f description="${DESCRIPTION}" \
-            -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" || {
-              echo "❌ Failed to report semantic versioning status!"
-              exit 1
-            }
-
-          echo "✅ Successfully reported status: ${RESULT}"
+        uses: tars-cloud/actions/composite/report-status@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        with:
+          title: Semantic Versioning
+          results: |
+            semantic-version=${{ needs.semantic-version.result }}
+            tag=${{ needs.tag.result }}
+            release=${{ needs.release.result }}
+          allow-skipped: |
+            tag
+            release
+          publish-status: "true"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          status-context: Semantic Versioning
+          reporting-errors: fail

@@ -28,6 +28,7 @@ ignorePaths:
   - secrets
   - vendor
 ignoreRegExpList:
+  - /"h1:[A-Za-z0-9+/=]+"/
   - /-----BEGIN PGP PUBLIC KEY BLOCK-----[\s\S]*?-----END PGP PUBLIC KEY BLOCK-----/
   - /initialHashedPassword\s*=\s*.*/
   - /\b([a-z0-9]{5}-)+[a-z0-9]{1,5}\b/
