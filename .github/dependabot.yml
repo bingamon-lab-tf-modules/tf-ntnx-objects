@@ -35,6 +35,14 @@ updates:
       prefix: "github-actions"
     rebase-strategy: "auto"
     open-pull-requests-limit: 5
+    groups:
+      tars-cloud-actions:
+        patterns:
+          - "tars-cloud/actions*"
+    ignore:
+      - dependency-name: "tars-cloud/actions*"
+        update-types:
+          - "version-update:semver-major"
 
     #########################
     # Terraform

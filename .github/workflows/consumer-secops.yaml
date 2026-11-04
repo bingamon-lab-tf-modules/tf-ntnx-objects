@@ -19,7 +19,7 @@ on:  # yamllint disable-line rule:truthy
 
 concurrency:
   group: secops-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -33,14 +33,20 @@ jobs:
   # -------------------------------------------------
   trivy:
     name: Trivy Scan
-    uses: tars-cloud/actions/.github/workflows/consumer-trivy.yaml@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+    uses: tars-cloud/actions/.github/workflows/consumer-trivy.yaml@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
     with:
       debug: false
       runner-architecture: AMD64
       type: devenv
       timeout-minutes: 120
       submodules: true
+      cleanup-android: true
+      cleanup-dotnet: true
+      cleanup-haskell: true
+      cleanup-boost: true
+      cleanup-swift: true
       config-file: auto
+      use-database-mirrors: true
       fail-on-findings: false
       publish-status: true
       status-context: Trivy
@@ -57,13 +63,18 @@ jobs:
   # -------------------------------------------------
   codeql:
     name: CodeQL Analysis
-    uses: tars-cloud/actions/.github/workflows/consumer-codeql.yaml@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+    uses: tars-cloud/actions/.github/workflows/consumer-codeql.yaml@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
     with:
       debug: false
       runner-architecture: AMD64
       type: devenv
       timeout-minutes: 360
       languages: '["actions"]'
+      cleanup-android: true
+      cleanup-dotnet: true
+      cleanup-haskell: true
+      cleanup-boost: true
+      cleanup-swift: true
     secrets:
       S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
       S3_BUCKET: ${{ secrets.S3_BUCKET }}

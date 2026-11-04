@@ -16,7 +16,7 @@ on:  # yamllint disable-line rule:truthy
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -69,9 +69,19 @@ jobs:
             *) echo "::error::TARS_CLOUD_RUNNER_TYPE must be saas or self-hosted."; exit 1 ;;
           esac
 
+      - id: free_disk_space
+        name: Free Disk Space
+        uses: tars-cloud/actions/composite/free-disk-space@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
+        with:
+          android: "true"
+          dotnet: "true"
+          haskell: "true"
+          boost: "true"
+          swift: "true"
+
       - id: set_up_consumer
         name: Set Up Consumer
-        uses: tars-cloud/actions/composite/setup-consumer@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        uses: tars-cloud/actions/composite/setup-consumer@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           debug: "false"
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || '' }}
@@ -88,7 +98,7 @@ jobs:
 
       - id: opentofu_init
         name: OpenTofu Init
-        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        uses: tars-cloud/actions/composite/run-devenv@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           system: x86_64-linux
           github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
@@ -103,7 +113,7 @@ jobs:
 
       - id: opentofu_format
         name: OpenTofu Format
-        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        uses: tars-cloud/actions/composite/run-devenv@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           system: x86_64-linux
           github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
@@ -118,7 +128,7 @@ jobs:
 
       - id: opentofu_docs_check
         name: OpenTofu Documentation Check
-        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        uses: tars-cloud/actions/composite/run-devenv@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           system: x86_64-linux
           github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
@@ -139,7 +149,7 @@ jobs:
 
       - id: opentofu_legacy_check
         name: OpenTofu Legacy Resource Sweep
-        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        uses: tars-cloud/actions/composite/run-devenv@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           system: x86_64-linux
           github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
@@ -157,7 +167,7 @@ jobs:
 
       - id: opentofu_validate
         name: OpenTofu Validate
-        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        uses: tars-cloud/actions/composite/run-devenv@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           system: x86_64-linux
           github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
@@ -172,14 +182,14 @@ jobs:
 
       - id: opentofu_security_scan
         name: OpenTofu Security Scan
-        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        uses: tars-cloud/actions/composite/run-devenv@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           system: x86_64-linux
           github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
           run: |
             echo "Running security scan..."
             if command -v trivy &> /dev/null; then
-              if ! trivy fs --scanners vuln,secret --exit-code 1 "${MODULE_HOME}"; then
+              if ! trivy fs --config trivy.yaml --cache-dir "${TRIVY_CACHE_DIR:-${RUNNER_TEMP}/trivy-cache}" --scanners vuln,secret --exit-code 1 "${MODULE_HOME}"; then
                 echo "Security scan found issues!"
                 exit 1
               fi
@@ -191,7 +201,7 @@ jobs:
 
       - id: opentofu_lint
         name: OpenTofu Lint
-        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        uses: tars-cloud/actions/composite/run-devenv@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           system: x86_64-linux
           github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
@@ -225,7 +235,7 @@ jobs:
 
       - id: opentofu_test
         name: OpenTofu Test
-        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        uses: tars-cloud/actions/composite/run-devenv@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           system: x86_64-linux
           github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
@@ -240,12 +250,13 @@ jobs:
 
       - id: report_opentofu_status
         name: Report OpenTofu Module Status
-        if: always()
-        uses: tars-cloud/actions/composite/report-status@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        if: always() && !cancelled()
+        uses: tars-cloud/actions/composite/report-status@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           title: OpenTofu Module (Test)
           results: |
             runner-mode=${{ steps.validate_runner_mode.outcome }}
+            disk-cleanup=${{ steps.free_disk_space.outcome }}
             setup=${{ steps.set_up_consumer.outcome }}
             init=${{ steps.opentofu_init.outcome }}
             format=${{ steps.opentofu_format.outcome }}
@@ -285,9 +296,19 @@ jobs:
             *) echo "::error::TARS_CLOUD_RUNNER_TYPE must be saas or self-hosted."; exit 1 ;;
           esac
 
+      - id: free_disk_space
+        name: Free Disk Space
+        uses: tars-cloud/actions/composite/free-disk-space@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
+        with:
+          android: "true"
+          dotnet: "true"
+          haskell: "true"
+          boost: "true"
+          swift: "true"
+
       - id: set_up_consumer
         name: Set Up Consumer
-        uses: tars-cloud/actions/composite/setup-consumer@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        uses: tars-cloud/actions/composite/setup-consumer@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           debug: "false"
           ref: ${{ github.event.release.tag_name }}
@@ -309,7 +330,7 @@ jobs:
 
       - id: create_package
         name: Create Module Package
-        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        uses: tars-cloud/actions/composite/run-devenv@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           system: x86_64-linux
           github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
@@ -326,7 +347,7 @@ jobs:
       - id: publish_artifactory
         name: Publish to Artifactory
         if: vars.ARTIFACTORY_URL != '' && steps.create_package.outcome == 'success'
-        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        uses: tars-cloud/actions/composite/run-devenv@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         env:
           ARTIFACTORY_URL: ${{ vars.ARTIFACTORY_URL }}
           ARTIFACTORY_TOKEN: ${{ secrets.ARTIFACTORY_TOKEN }}
@@ -346,12 +367,13 @@ jobs:
 
       - id: report_publish_status
         name: Report Publish Status
-        if: always()
-        uses: tars-cloud/actions/composite/report-status@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        if: always() && !cancelled()
+        uses: tars-cloud/actions/composite/report-status@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           title: OpenTofu Module (Publish)
           results: |
             runner-mode=${{ steps.validate_runner_mode.outcome }}
+            disk-cleanup=${{ steps.free_disk_space.outcome }}
             setup=${{ steps.set_up_consumer.outcome }}
             extract-version=${{ steps.extract_version.outcome }}
             create-package=${{ steps.create_package.outcome }}
