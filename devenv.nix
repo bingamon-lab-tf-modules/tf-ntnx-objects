@@ -32,6 +32,7 @@ let
 
     # Secrets
     age
+    sops
     ssh-to-age
     ssh-to-pgp
 
@@ -95,20 +96,28 @@ in
     packages ++ lib.optionals (!config.container.isBuilding || config.name == "devenv") devPackages;
 
   enterShell = ''
-    figlet -f starwars -w 180 $PROJECT
+    if [[ "${"CI:-false"}" == "true" ]]; then
+      echo "devenv running in CI"
+    else
+      figlet -f slant -w 180 "$(echo "$PROJECT" | tr '[:lower:]-' '[:upper:] ')"
 
-    hello --greeting="Hello ''${USER:-user}, welcome to the $PROJECT project!"
+      hello --greeting="Hello ''${USER:-user}, welcome to the $PROJECT project."
 
-    echo ""
-    echo "#########################"
-    echo "#### Helper scripts #####"
-    echo "#########################"
-    echo ""
-    ${pkgs.gnused}/bin/sed -e 's| |••|g' -e 's|=| |' <<EOF | ${pkgs.util-linuxMinimal}/bin/column -t | ${pkgs.gnused}/bin/sed -e 's|^|🦾 |' -e 's|••| |g'
-    ${lib.generators.toKeyValue { } (lib.mapAttrs (_name: value: value.description) config.scripts)}
-    EOF
-    echo ""
-    echo "#########################"
+      ${lib.optionalString (config.scripts != { }) ''
+        echo ""
+        echo "#########################"
+        echo "#### Helper scripts #####"
+        echo "#########################"
+        echo "🦾"
+        ${lib.concatStrings (
+          lib.mapAttrsToList (
+            name: value: "printf '🦾 %-20s  %s\\n' '${name}' '${value.description}'\n"
+          ) config.scripts
+        )}
+        echo "🦾"
+        echo "#########################"
+      ''}
+    fi
   '';
 
   languages = {
@@ -172,6 +181,9 @@ in
                 "sup"
               ];
             };
+            MD041 = false;
+            MD059 = false;
+            MD060 = false;
           };
         };
       };
@@ -182,6 +194,7 @@ in
         enable = true;
         excludes = [
           "module/README.md"
+          "module/tests/README.md"
         ];
       };
       # Use prettier instead.
@@ -278,24 +291,49 @@ in
           echo "Directory ''${REPO_ROOT}/module does not exist. Please run this script from the root of the repository."
           exit 1
         fi
-        # Every entry point in the repo: the nutanix one at module/, plus each
-        # additional provider-specific one under modules/<name>/.
         MODULE_HOMES="''${REPO_ROOT}/module"
-        for CANDIDATE in "''${REPO_ROOT}"/modules/*;
-        do
-          if [ -d "''${CANDIDATE}" ];
-          then
-            MODULE_HOMES="''${MODULE_HOMES} ''${CANDIDATE}"
-          fi
-        done
+        if [ -d "''${REPO_ROOT}/modules" ];
+        then
+          for CANDIDATE in "''${REPO_ROOT}"/modules/*;
+          do
+            if [ -d "''${CANDIDATE}" ];
+            then
+              MODULE_HOMES="''${MODULE_HOMES} ''${CANDIDATE}"
+            fi
+          done
+        fi
         for MODULE_HOME in ''${MODULE_HOMES};
         do
           echo "Checking Terraform Module for ''${MODULE_HOME}"
           tofu-format "''${MODULE_HOME}" || exit 1
+          tofu-clean "''${MODULE_HOME}" || exit 1
           tofu-init "''${MODULE_HOME}" || exit 1
           tofu-validate "''${MODULE_HOME}" || exit 1
           tofu-docs "''${MODULE_HOME}" || exit 1
         done
+      '';
+    };
+
+    tofu-clean = {
+      package = pkgs.bash;
+      description = "Clean the OpenTofu providers for a given directory";
+      exec = ''
+        DIR="''${1:-}"
+        if [ "''${DIR:-EMPTY}" == "EMPTY" ];
+        then
+          echo "Usage: $0 <directory>"
+          exit 1
+        fi
+        if [ ! -d "''${DIR}" ];
+        then
+          echo "Directory ''${DIR} does not exist"
+          exit 1
+        fi
+        echo "Cleaning OpenTofu state in ''${DIR}"
+        pushd "''${DIR}"
+        # Remove any stale .terraform dir so there is no cached backend state.
+        rm -rf "''${DIR}/.terraform"
+        popd
       '';
     };
 
@@ -316,7 +354,7 @@ in
         fi
         echo "Formatting OpenTofu code in ''${DIR}"
         pushd "''${DIR}"
-        tofu fmt -write=true "''${DIR}" || {
+        tofu fmt -write=true -recursive "''${DIR}" || {
           echo "Failed to format OpenTofu code in ''${DIR}"
           exit 1
         }
@@ -341,7 +379,7 @@ in
         fi
         echo "Initialising OpenTofu providers in ''${DIR}"
         pushd "''${DIR}"
-        tofu init -backend=false || {
+        tofu init -backend=false -input=false || {
           echo "Failed to initialise OpenTofu providers in ''${DIR}"
           exit 1
         }
@@ -368,6 +406,31 @@ in
         pushd "''${DIR}"
         tofu validate || {
           echo "Failed to validate OpenTofu code in ''${DIR}"
+          exit 1
+        }
+        popd
+      '';
+    };
+
+    tofu-test = {
+      package = pkgs.bash;
+      description = "Run OpenTofu tests in a given directory";
+      exec = ''
+        DIR="''${1:-}"
+        if [ "''${DIR:-EMPTY}" == "EMPTY" ];
+        then
+          echo "Usage: $0 <directory>"
+          exit 1
+        fi
+        if [ ! -d "''${DIR}" ];
+        then
+          echo "Directory ''${DIR} does not exist"
+          exit 1
+        fi
+        echo "Running OpenTofu tests in ''${DIR}"
+        pushd "''${DIR}"
+        tofu test -verbose || {
+          echo "Failed to run OpenTofu tests in ''${DIR}"
           exit 1
         }
         popd

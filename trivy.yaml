@@ -11,13 +11,22 @@ db:
   skip-update: false
   no-progress: true
   repository:
-    - "public.ecr.aws/aquasecurity/trivy-db:2"
+    - "ghcr.io/tars-cloud/actions/trivy-db:2"
     - "ghcr.io/aquasecurity/trivy-db:2"
-    - "aquasec/trivy-db:2"
+    - "docker.io/aquasec/trivy-db:2"
+    - "public.ecr.aws/aquasecurity/trivy-db:2"
   java-repository:
-    - "public.ecr.aws/aquasecurity/trivy-java-db:1"
+    - "ghcr.io/tars-cloud/actions/trivy-java-db:1"
     - "ghcr.io/aquasecurity/trivy-java-db:1"
-    - "aquasec/trivy-java-db:1"
+    - "docker.io/aquasec/trivy-java-db:1"
+    - "public.ecr.aws/aquasecurity/trivy-java-db:1"
+
+java-db:
+  repository:
+    - "ghcr.io/tars-cloud/actions/trivy-java-db:1"
+    - "ghcr.io/aquasecurity/trivy-java-db:1"
+    - "docker.io/aquasec/trivy-java-db:1"
+    - "public.ecr.aws/aquasecurity/trivy-java-db:1"
 
 # Report
 exit-code: 1
@@ -47,6 +56,7 @@ scan:
     - .devenv
     - .direnv
     - .git
+    - .tars
 
 # Package
 pkg:
@@ -59,4 +69,4 @@ pkg:
 misconfiguration:
   terraform:
     exclude-downloaded-modules: false
-  checks-bundle-repository: "ghcr.io/aquasecurity/trivy-checks:1"
+  checks-bundle-repository: "ghcr.io/tars-cloud/actions/trivy-checks:2"
