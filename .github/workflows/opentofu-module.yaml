@@ -88,7 +88,7 @@ jobs:
 
       - id: opentofu_init
         name: OpenTofu Init
-        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        uses: tars-cloud/actions/composite/run-devenv@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           system: x86_64-linux
           github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
@@ -103,7 +103,7 @@ jobs:
 
       - id: opentofu_format
         name: OpenTofu Format
-        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        uses: tars-cloud/actions/composite/run-devenv@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           system: x86_64-linux
           github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
@@ -118,7 +118,7 @@ jobs:
 
       - id: opentofu_docs_check
         name: OpenTofu Documentation Check
-        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        uses: tars-cloud/actions/composite/run-devenv@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           system: x86_64-linux
           github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
@@ -139,7 +139,7 @@ jobs:
 
       - id: opentofu_legacy_check
         name: OpenTofu Legacy Resource Sweep
-        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        uses: tars-cloud/actions/composite/run-devenv@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           system: x86_64-linux
           github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
@@ -157,7 +157,7 @@ jobs:
 
       - id: opentofu_validate
         name: OpenTofu Validate
-        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        uses: tars-cloud/actions/composite/run-devenv@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           system: x86_64-linux
           github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
@@ -172,7 +172,7 @@ jobs:
 
       - id: opentofu_security_scan
         name: OpenTofu Security Scan
-        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        uses: tars-cloud/actions/composite/run-devenv@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           system: x86_64-linux
           github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
@@ -191,7 +191,7 @@ jobs:
 
       - id: opentofu_lint
         name: OpenTofu Lint
-        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        uses: tars-cloud/actions/composite/run-devenv@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           system: x86_64-linux
           github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
@@ -225,7 +225,7 @@ jobs:
 
       - id: opentofu_test
         name: OpenTofu Test
-        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        uses: tars-cloud/actions/composite/run-devenv@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           system: x86_64-linux
           github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
@@ -309,7 +309,7 @@ jobs:
 
       - id: create_package
         name: Create Module Package
-        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        uses: tars-cloud/actions/composite/run-devenv@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           system: x86_64-linux
           github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
@@ -326,7 +326,7 @@ jobs:
       - id: publish_artifactory
         name: Publish to Artifactory
         if: vars.ARTIFACTORY_URL != '' && steps.create_package.outcome == 'success'
-        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        uses: tars-cloud/actions/composite/run-devenv@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         env:
           ARTIFACTORY_URL: ${{ vars.ARTIFACTORY_URL }}
           ARTIFACTORY_TOKEN: ${{ secrets.ARTIFACTORY_TOKEN }}
