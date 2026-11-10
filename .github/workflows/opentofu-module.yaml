@@ -81,7 +81,7 @@ jobs:
 
       - id: set_up_consumer
         name: Set Up Consumer
-        uses: tars-cloud/actions/composite/setup-consumer@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
+        uses: tars-cloud/actions/composite/setup-consumer@2ff528f5c523bbdfabd988e6c3b12fd0fa50a7e0 # v3.13.3
         with:
           debug: "false"
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || '' }}
@@ -308,7 +308,7 @@ jobs:
 
       - id: set_up_consumer
         name: Set Up Consumer
-        uses: tars-cloud/actions/composite/setup-consumer@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
+        uses: tars-cloud/actions/composite/setup-consumer@2ff528f5c523bbdfabd988e6c3b12fd0fa50a7e0 # v3.13.3
         with:
           debug: "false"
           ref: ${{ github.event.release.tag_name }}
