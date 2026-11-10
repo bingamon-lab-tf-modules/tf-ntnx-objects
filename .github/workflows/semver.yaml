@@ -451,7 +451,7 @@ jobs:
           (github.event.inputs.changelog_tool == 'convco') ||
           (github.event.inputs.changelog_tool == null && vars.SEMVER_CHANGELOG_TOOL == 'convco') ||
           (github.event.inputs.changelog_tool == null && vars.SEMVER_CHANGELOG_TOOL == null && env.SEMVER_CHANGELOG_TOOL == 'convco')
-        uses: tars-cloud/actions/composite/run-devenv@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
+        uses: tars-cloud/actions/composite/run-devenv@2ff528f5c523bbdfabd988e6c3b12fd0fa50a7e0 # v3.13.3
         with:
           system: x86_64-linux
           github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
