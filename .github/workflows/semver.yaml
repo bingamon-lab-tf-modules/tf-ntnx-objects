@@ -34,7 +34,7 @@ on:  # yamllint disable-line rule:truthy
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   actions: read
@@ -92,7 +92,7 @@ jobs:
 
       - id: checkout_repository
         name: Checkout Repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: false
           submodules: recursive
@@ -100,7 +100,7 @@ jobs:
 
       - id: extract_labels
         name: Extract Labels
-        uses: actions/github-script@v9
+        uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9.0.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -244,7 +244,7 @@ jobs:
 
       - id: calculate_semver
         name: Calculate Semantic Version
-        uses: actions/github-script@v9
+        uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9.0.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -345,7 +345,7 @@ jobs:
 
       - id: checkout_repository
         name: Checkout Repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: false
           submodules: recursive
@@ -423,9 +423,19 @@ jobs:
             *) echo "::error::TARS_CLOUD_RUNNER_TYPE must be saas or self-hosted."; exit 1 ;;
           esac
 
+      - id: free_disk_space
+        name: Free Disk Space
+        uses: tars-cloud/actions/composite/free-disk-space@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
+        with:
+          android: "true"
+          dotnet: "true"
+          haskell: "true"
+          boost: "true"
+          swift: "true"
+
       - id: set_up_consumer
         name: Set Up Consumer
-        uses: tars-cloud/actions/composite/setup-consumer@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        uses: tars-cloud/actions/composite/setup-consumer@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           debug: "false"
           fetch-depth: "0"
@@ -441,7 +451,7 @@ jobs:
           (github.event.inputs.changelog_tool == 'convco') ||
           (github.event.inputs.changelog_tool == null && vars.SEMVER_CHANGELOG_TOOL == 'convco') ||
           (github.event.inputs.changelog_tool == null && vars.SEMVER_CHANGELOG_TOOL == null && env.SEMVER_CHANGELOG_TOOL == 'convco')
-        uses: tars-cloud/actions/composite/run-devenv@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        uses: tars-cloud/actions/composite/run-devenv@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           system: x86_64-linux
           github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
@@ -507,7 +517,7 @@ jobs:
 
       - id: create_release
         name: Create GitHub Release
-        uses: actions/github-script@v9
+        uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9.0.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -667,7 +677,7 @@ jobs:
       - semantic-version
       - tag
       - release
-    if: always()
+    if: always() && !cancelled()
     timeout-minutes: 20
     continue-on-error: true
     steps:
@@ -684,8 +694,8 @@ jobs:
 
       - id: report_status
         name: Report Semantic Versioning Status
-        if: always()
-        uses: tars-cloud/actions/composite/report-status@26ffb67cc8d374672f646d6dd8829befa844b0e9 # v3.12.0
+        if: always() && !cancelled()
+        uses: tars-cloud/actions/composite/report-status@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
         with:
           title: Semantic Versioning
           results: |
