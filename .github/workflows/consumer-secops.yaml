@@ -33,9 +33,12 @@ jobs:
   # -------------------------------------------------
   trivy:
     name: Trivy Scan
-    uses: tars-cloud/actions/.github/workflows/consumer-trivy.yaml@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
+    uses: tars-cloud/actions/.github/workflows/consumer-trivy.yaml@2ff528f5c523bbdfabd988e6c3b12fd0fa50a7e0 # v3.13.3
     with:
       debug: false
+      runs-on: >-
+        ${{ (github.actor == 'dependabot[bot]' || github.event.pull_request.user.login == 'dependabot[bot]') &&
+        '"ubuntu-24.04"' || '' }}
       runner-architecture: AMD64
       type: devenv
       timeout-minutes: 120
@@ -63,9 +66,12 @@ jobs:
   # -------------------------------------------------
   codeql:
     name: CodeQL Analysis
-    uses: tars-cloud/actions/.github/workflows/consumer-codeql.yaml@66eaed79bdbbb12ecbc98d3a50b6ab58b289b19b # v3.13.2
+    uses: tars-cloud/actions/.github/workflows/consumer-codeql.yaml@2ff528f5c523bbdfabd988e6c3b12fd0fa50a7e0 # v3.13.3
     with:
       debug: false
+      runs-on: >-
+        ${{ (github.actor == 'dependabot[bot]' || github.event.pull_request.user.login == 'dependabot[bot]') &&
+        '"ubuntu-24.04"' || '' }}
       runner-architecture: AMD64
       type: devenv
       timeout-minutes: 360
