@@ -1,4 +1,5 @@
 ---
+# cspell:words endgroup
 name: "Consumer: OpenTofu Module"
 
 # prettier-ignore
@@ -73,7 +74,7 @@ jobs:
 
       - id: free_disk_space
         name: Free Disk Space
-        uses: tars-cloud/actions/composite/free-disk-space@2ff528f5c523bbdfabd988e6c3b12fd0fa50a7e0 # v3.13.3
+        uses: tars-cloud/actions/composite/free-disk-space@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
         with:
           android: "true"
           dotnet: "true"
@@ -83,79 +84,54 @@ jobs:
 
       - id: set_up_consumer
         name: Set Up Consumer
-        uses: tars-cloud/actions/composite/setup-consumer@2ff528f5c523bbdfabd988e6c3b12fd0fa50a7e0 # v3.13.3
+        uses: tars-cloud/actions/composite/setup-consumer@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
         with:
           debug: "false"
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || '' }}
           lfs: "false"
           submodules: recursive
+          tools: none
           system: x86_64-linux
           warmup: "false"
-          s3-endpoint: ${{ secrets.S3_ENDPOINT }}
-          s3-bucket: ${{ secrets.S3_BUCKET }}
-          s3-region: ${{ secrets.S3_REGION }}
-          s3-access-key: ${{ secrets.S3_ACCESS_KEY }}
-          s3-secret-key: ${{ secrets.S3_SECRET_ACCESS_KEY }}
-          s3-session-token: ${{ secrets.S3_SESSION_TOKEN }}
 
-      - id: opentofu_init
-        name: OpenTofu Init
-        uses: tars-cloud/actions/composite/run-devenv@2ff528f5c523bbdfabd988e6c3b12fd0fa50a7e0 # v3.13.3
+      - id: opentofu_checks
+        name: OpenTofu Module Checks
+        uses: tars-cloud/actions/composite/run-devenv@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
         with:
           system: x86_64-linux
           github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
           run: |
-            echo "Initializing OpenTofu..."
-            cd "${MODULE_HOME}"
-            if ! tofu init -backend=false; then
+            echo "::group::OpenTofu Init"
+            if ! (cd "${MODULE_HOME}" && tofu init -backend=false); then
               echo "OpenTofu initialization failed!"
               exit 1
             fi
             echo "OpenTofu initialization completed"
+            echo "::endgroup::"
 
-      - id: opentofu_format
-        name: OpenTofu Format
-        uses: tars-cloud/actions/composite/run-devenv@2ff528f5c523bbdfabd988e6c3b12fd0fa50a7e0 # v3.13.3
-        with:
-          system: x86_64-linux
-          github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
-          run: |
-            echo "Checking OpenTofu format..."
+            echo "::group::OpenTofu Format"
             if ! tofu fmt -check -recursive "${MODULE_HOME}"; then
               echo "OpenTofu files are not properly formatted!"
               echo "Run: tofu fmt -recursive ${MODULE_HOME}"
               exit 1
             fi
             echo "OpenTofu format check passed"
+            echo "::endgroup::"
 
-      - id: opentofu_docs_check
-        name: OpenTofu Documentation Check
-        uses: tars-cloud/actions/composite/run-devenv@2ff528f5c523bbdfabd988e6c3b12fd0fa50a7e0 # v3.13.3
-        with:
-          system: x86_64-linux
-          github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
-          run: |
-            echo "Checking OpenTofu documentation..."
-            if command -v terraform-docs &> /dev/null; then
-              if ! terraform-docs --output-check --config .terraform-docs.yml "${MODULE_HOME}"; then
-                echo "Module README.md is out of date!"
-                echo "Run: tofu-docs ${MODULE_HOME} locally to update the README.md"
-                terraform-docs --output-check --config .terraform-docs.yml "${MODULE_HOME}"
-                exit 1
-              fi
-              echo "Documentation is up to date"
-            else
+            echo "::group::OpenTofu Documentation Check"
+            if ! command -v terraform-docs &> /dev/null; then
               echo "terraform-docs not available, documentation check failed"
               exit 1
             fi
+            if ! terraform-docs --output-check --config .terraform-docs.yml "${MODULE_HOME}"; then
+              echo "Module README.md is out of date!"
+              echo "Run: tofu-docs ${MODULE_HOME} locally to update the README.md"
+              exit 1
+            fi
+            echo "Documentation is up to date"
+            echo "::endgroup::"
 
-      - id: opentofu_legacy_check
-        name: OpenTofu Legacy Resource Sweep
-        uses: tars-cloud/actions/composite/run-devenv@2ff528f5c523bbdfabd988e6c3b12fd0fa50a7e0 # v3.13.3
-        with:
-          system: x86_64-linux
-          github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
-          run: |
+            echo "::group::OpenTofu Legacy Resource Sweep"
             if [[ -x ./scripts/check-legacy-resources.sh ]]; then
               echo "Checking for legacy (non-_v2) Nutanix resources..."
               if ! ./scripts/check-legacy-resources.sh; then
@@ -166,109 +142,59 @@ jobs:
             else
               echo "No legacy resource check script present; skipping."
             fi
+            echo "::endgroup::"
 
-      - id: opentofu_validate
-        name: OpenTofu Validate
-        uses: tars-cloud/actions/composite/run-devenv@2ff528f5c523bbdfabd988e6c3b12fd0fa50a7e0 # v3.13.3
-        with:
-          system: x86_64-linux
-          github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
-          run: |
-            echo "Validating OpenTofu configuration..."
-            cd "${MODULE_HOME}"
-            if ! tofu validate; then
+            echo "::group::OpenTofu Validate"
+            if ! (cd "${MODULE_HOME}" && tofu validate); then
               echo "OpenTofu validation failed!"
               exit 1
             fi
             echo "OpenTofu validation passed"
+            echo "::endgroup::"
 
-      - id: opentofu_security_scan
-        name: OpenTofu Security Scan
-        uses: tars-cloud/actions/composite/run-devenv@2ff528f5c523bbdfabd988e6c3b12fd0fa50a7e0 # v3.13.3
-        with:
-          system: x86_64-linux
-          github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
-          run: |
-            echo "Running security scan..."
-            if command -v trivy &> /dev/null; then
-              if ! trivy fs --config trivy.yaml --cache-dir "${TRIVY_CACHE_DIR:-${RUNNER_TEMP}/trivy-cache}" --scanners vuln,secret --exit-code 1 "${MODULE_HOME}"; then
-                echo "Security scan found issues!"
-                exit 1
-              fi
-              echo "Security scan passed"
-            else
-              echo "Trivy not available, security scan failed"
-              exit 1
-            fi
-
-      - id: opentofu_lint
-        name: OpenTofu Lint
-        uses: tars-cloud/actions/composite/run-devenv@2ff528f5c523bbdfabd988e6c3b12fd0fa50a7e0 # v3.13.3
-        with:
-          system: x86_64-linux
-          github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
-          run: |
-            echo "Running OpenTofu linting..."
-            if command -v tflint &> /dev/null; then
-              cd "${MODULE_HOME}"
-              if ! tflint --format=compact; then
-                echo "OpenTofu linting failed!"
-                exit 1
-              fi
-              echo "OpenTofu linting passed"
-            else
+            echo "::group::OpenTofu Lint"
+            if ! command -v tflint &> /dev/null; then
               echo "tflint not available, linting failed"
               exit 1
             fi
-
-      - id: opentofu_test_guard
-        name: OpenTofu Test Guard
-        shell: bash
-        run: |
-          if [[ -x ./scripts/check-legacy-resources.sh ]]; then
-            count=$(find "${MODULE_HOME}" -name '*.tftest.hcl' | wc -l)
-            if [[ "$count" -le 0 ]]; then
-              echo "::error::No tftest files found in ${MODULE_HOME}"
+            if ! (cd "${MODULE_HOME}" && tflint --format=compact); then
+              echo "OpenTofu linting failed!"
               exit 1
             fi
-          else
-            echo "Test guard not enforced for this repository family; skipping."
-          fi
+            echo "OpenTofu linting passed"
+            echo "::endgroup::"
 
-      - id: opentofu_test
-        name: OpenTofu Test
-        uses: tars-cloud/actions/composite/run-devenv@2ff528f5c523bbdfabd988e6c3b12fd0fa50a7e0 # v3.13.3
-        with:
-          system: x86_64-linux
-          github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
-          run: |
-            echo "Running OpenTofu tests..."
-            cd "${MODULE_HOME}"
-            if ! tofu test -verbose; then
+            echo "::group::OpenTofu Test Guard"
+            if [[ -x ./scripts/check-legacy-resources.sh ]]; then
+              count=$(find "${MODULE_HOME}" -name '*.tftest.hcl' | wc -l)
+              if [[ "$count" -le 0 ]]; then
+                echo "::error::No tftest files found in ${MODULE_HOME}"
+                exit 1
+              fi
+            else
+              echo "Test guard not enforced for this repository family; skipping."
+            fi
+            echo "::endgroup::"
+
+            echo "::group::OpenTofu Test"
+            if ! (cd "${MODULE_HOME}" && tofu test -verbose); then
               echo "OpenTofu tests failed!"
               exit 1
             fi
             echo "OpenTofu tests passed"
+            echo "::endgroup::"
 
       - id: report_opentofu_status
         name: Report OpenTofu Module Status
         if: always() && !cancelled()
-        uses: tars-cloud/actions/composite/report-status@2ff528f5c523bbdfabd988e6c3b12fd0fa50a7e0 # v3.13.3
+        uses: tars-cloud/actions/composite/report-status@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
         with:
           title: OpenTofu Module (Test)
           results: |
             runner-mode=${{ steps.validate_runner_mode.outcome }}
             disk-cleanup=${{ steps.free_disk_space.outcome }}
             setup=${{ steps.set_up_consumer.outcome }}
-            init=${{ steps.opentofu_init.outcome }}
-            format=${{ steps.opentofu_format.outcome }}
-            docs=${{ steps.opentofu_docs_check.outcome }}
-            legacy-sweep=${{ steps.opentofu_legacy_check.outcome }}
-            validate=${{ steps.opentofu_validate.outcome }}
-            security=${{ steps.opentofu_security_scan.outcome }}
-            lint=${{ steps.opentofu_lint.outcome }}
-            test-guard=${{ steps.opentofu_test_guard.outcome }}
-            test=${{ steps.opentofu_test.outcome }}
+            checks=${{ steps.opentofu_checks.outcome }}
           fail-on-error: "true"
 
   # -------------------------------------------------
@@ -300,7 +226,7 @@ jobs:
 
       - id: free_disk_space
         name: Free Disk Space
-        uses: tars-cloud/actions/composite/free-disk-space@2ff528f5c523bbdfabd988e6c3b12fd0fa50a7e0 # v3.13.3
+        uses: tars-cloud/actions/composite/free-disk-space@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
         with:
           android: "true"
           dotnet: "true"
@@ -310,7 +236,7 @@ jobs:
 
       - id: set_up_consumer
         name: Set Up Consumer
-        uses: tars-cloud/actions/composite/setup-consumer@2ff528f5c523bbdfabd988e6c3b12fd0fa50a7e0 # v3.13.3
+        uses: tars-cloud/actions/composite/setup-consumer@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
         with:
           debug: "false"
           ref: ${{ github.event.release.tag_name }}
@@ -332,7 +258,7 @@ jobs:
 
       - id: create_package
         name: Create Module Package
-        uses: tars-cloud/actions/composite/run-devenv@2ff528f5c523bbdfabd988e6c3b12fd0fa50a7e0 # v3.13.3
+        uses: tars-cloud/actions/composite/run-devenv@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
         with:
           system: x86_64-linux
           github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
@@ -349,7 +275,7 @@ jobs:
       - id: publish_artifactory
         name: Publish to Artifactory
         if: vars.ARTIFACTORY_URL != '' && steps.create_package.outcome == 'success'
-        uses: tars-cloud/actions/composite/run-devenv@2ff528f5c523bbdfabd988e6c3b12fd0fa50a7e0 # v3.13.3
+        uses: tars-cloud/actions/composite/run-devenv@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
         env:
           ARTIFACTORY_URL: ${{ vars.ARTIFACTORY_URL }}
           ARTIFACTORY_TOKEN: ${{ secrets.ARTIFACTORY_TOKEN }}
@@ -370,7 +296,7 @@ jobs:
       - id: report_publish_status
         name: Report Publish Status
         if: always() && !cancelled()
-        uses: tars-cloud/actions/composite/report-status@2ff528f5c523bbdfabd988e6c3b12fd0fa50a7e0 # v3.13.3
+        uses: tars-cloud/actions/composite/report-status@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
         with:
           title: OpenTofu Module (Publish)
           results: |

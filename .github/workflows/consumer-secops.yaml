@@ -25,7 +25,6 @@ permissions:
   contents: read
   actions: read
   security-events: write
-  statuses: write
 
 jobs:
   # -------------------------------------------------
@@ -33,7 +32,7 @@ jobs:
   # -------------------------------------------------
   trivy:
     name: Trivy Scan
-    uses: tars-cloud/actions/.github/workflows/consumer-trivy.yaml@2ff528f5c523bbdfabd988e6c3b12fd0fa50a7e0 # v3.13.3
+    uses: tars-cloud/actions/.github/workflows/consumer-trivy.yaml@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
     with:
       debug: false
       runs-on: >-
@@ -48,11 +47,10 @@ jobs:
       cleanup-haskell: true
       cleanup-boost: true
       cleanup-swift: true
-      config-file: auto
+      config-file: trivy.yaml
+      gate-config-file: .github/trivy/gate.yaml
       use-database-mirrors: true
-      fail-on-findings: false
-      publish-status: true
-      status-context: Trivy
+      fail-on-findings: true
     secrets:
       S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
       S3_BUCKET: ${{ secrets.S3_BUCKET }}
@@ -66,7 +64,7 @@ jobs:
   # -------------------------------------------------
   codeql:
     name: CodeQL Analysis
-    uses: tars-cloud/actions/.github/workflows/consumer-codeql.yaml@2ff528f5c523bbdfabd988e6c3b12fd0fa50a7e0 # v3.13.3
+    uses: tars-cloud/actions/.github/workflows/consumer-codeql.yaml@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
     with:
       debug: false
       runs-on: >-
