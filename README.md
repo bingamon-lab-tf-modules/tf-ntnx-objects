@@ -24,7 +24,7 @@ provider `for_each`'d over the object stores.
 
 ## Capability boundary
 
-Provider `>= 2.4.2` exposes object store and object-store-certificate resources
+Provider `~> 2.5.1` exposes object store and object-store-certificate resources
 only, so this module is **store level**. But the boundary is narrower than "no S3
 management at all" — be precise about what is and is not available:
 

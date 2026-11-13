@@ -23,14 +23,14 @@ so resizing means destroy and recreate.
 | ---- | ------- |
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.10.0 |
 | <a name="requirement_local"></a> [local](#requirement\_local) | >= 2.4.0 |
-| <a name="requirement_nutanix"></a> [nutanix](#requirement\_nutanix) | >= 2.4.2 |
+| <a name="requirement_nutanix"></a> [nutanix](#requirement\_nutanix) | ~> 2.5.1 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
 | <a name="provider_local"></a> [local](#provider\_local) | 2.9.1 |
-| <a name="provider_nutanix"></a> [nutanix](#provider\_nutanix) | 2.5.0 |
+| <a name="provider_nutanix"></a> [nutanix](#provider\_nutanix) | 2.5.1 |
 
 ## Modules
 
