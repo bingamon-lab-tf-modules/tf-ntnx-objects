@@ -357,3 +357,169 @@ run "certificate_inline_rendered" {
     error_message = "Expected one rendered certificate for an inline bundle"
   }
 }
+
+# Test 11: Populated v2.5.1 data lookups (existing stores list, single store by ext_id, cluster management_server.type string).
+run "populated_data_lookups_v2_5_1" {
+  command = plan
+
+  override_data {
+    target = data.nutanix_clusters_v2.clusters[0]
+    values = {
+      cluster_entities = [
+        {
+          ext_id                   = "00000000-0000-0000-0000-000000000000"
+          name                     = "mock-cluster"
+          backup_eligibility_score = 0
+          categories               = []
+          cluster_profile_ext_id   = ""
+          container_name           = ""
+          expand                   = ""
+          inefficient_vm_count     = 0
+          links                    = []
+          nodes                    = []
+          tenant_id                = ""
+          upgrade_status           = ""
+          vm_count                 = 0
+          network = [
+            {
+              backplane                  = []
+              external_address           = []
+              external_data_services_ip  = []
+              external_subnet            = ""
+              fqdn                       = ""
+              http_proxy_list            = []
+              http_proxy_white_list      = []
+              internal_subnet            = ""
+              key_management_server_type = ""
+              masquerading_ip            = []
+              masquerading_port          = ""
+              name_server_ip_list        = []
+              nfs_subnet_white_list      = []
+              ntp_server_ip_list         = []
+              smtp_server                = []
+              management_server = [
+                {
+                  ip             = []
+                  is_drs_enabled = false
+                  is_in_use      = true
+                  is_registered  = true
+                  type           = "VCENTER"
+                }
+              ]
+            }
+          ]
+          config = [
+            {
+              authorized_public_key_list       = []
+              build_info                       = []
+              cluster_arch                     = ""
+              cluster_function                 = ["AOS"]
+              cluster_software_map             = []
+              encryption_in_transit_status     = ""
+              encryption_option                = []
+              encryption_scope                 = []
+              fault_tolerance_state            = []
+              hypervisor_types                 = ["AHV"]
+              incarnation_id                   = 0
+              is_available                     = true
+              is_lts                           = false
+              is_password_remote_login_enabled = false
+              is_remote_support_enabled        = false
+              operation_mode                   = ""
+              pulse_status                     = []
+              redundancy_factor                = 2
+              timezone                         = ""
+            }
+          ]
+        }
+      ]
+    }
+  }
+
+  override_data {
+    target = data.nutanix_object_stores_v2.existing[0]
+    values = {
+      object_stores = [
+        {
+          certificate_ext_ids       = ["33333333-3333-3333-3333-333333333333"]
+          cluster_ext_id            = "00000000-0000-0000-0000-000000000000"
+          creation_time             = "2026-01-01T00:00:00Z"
+          deployment_version        = "5.1.1"
+          description               = "Existing object store"
+          domain                    = "objects-existing.pc.example.com"
+          ext_id                    = "22222222-2222-2222-2222-222222222222"
+          last_update_time          = "2026-01-01T00:00:00Z"
+          links                     = []
+          metadata                  = []
+          name                      = "existing-store"
+          num_worker_nodes          = 1
+          public_network_ips        = []
+          public_network_reference  = "57c4caf1-67e3-457e-8265-6d872f2a3135"
+          region                    = "us-east-1"
+          state                     = "OBJECT_STORE_AVAILABLE"
+          storage_network_dns_ip    = []
+          storage_network_reference = "57c4caf1-67e3-457e-8265-6d872f2a3135"
+          storage_network_vip       = []
+          tenant_id                 = ""
+          total_capacity_gib        = 20
+        }
+      ]
+    }
+  }
+
+  override_data {
+    target = data.nutanix_object_store_v2.by_ext_id["existing_lab"]
+    values = {
+      certificate_ext_ids       = ["33333333-3333-3333-3333-333333333333"]
+      cluster_ext_id            = "00000000-0000-0000-0000-000000000000"
+      creation_time             = "2026-01-01T00:00:00Z"
+      deployment_version        = "5.1.1"
+      description               = "Existing object store"
+      domain                    = "objects-existing.pc.example.com"
+      last_update_time          = "2026-01-01T00:00:00Z"
+      links                     = []
+      metadata                  = []
+      name                      = "existing-store"
+      num_worker_nodes          = 1
+      public_network_ips        = []
+      public_network_reference  = "57c4caf1-67e3-457e-8265-6d872f2a3135"
+      region                    = "us-east-1"
+      state                     = "OBJECT_STORE_AVAILABLE"
+      storage_network_dns_ip    = []
+      storage_network_reference = "57c4caf1-67e3-457e-8265-6d872f2a3135"
+      storage_network_vip       = []
+      tenant_id                 = ""
+      total_capacity_gib        = 20
+    }
+  }
+
+  variables {
+    lookup_existing_object_stores = true
+    object_store_lookup_ext_ids = {
+      existing_lab = "22222222-2222-2222-2222-222222222222"
+    }
+    object_stores = {
+      lab = {
+        name             = "lab-objects"
+        cluster          = "mock-cluster"
+        num_worker_nodes = 1
+        domain           = "objects-0.pc.example.com"
+      }
+    }
+  }
+
+  assert {
+    condition     = length(output.existing_object_stores) == 1 && output.existing_object_stores[0].name == "existing-store"
+    error_message = "Expected existing_object_stores to return the populated v2.5.1 store"
+  }
+
+  assert {
+    condition     = output.looked_up_object_stores["existing_lab"].state == "OBJECT_STORE_AVAILABLE"
+    error_message = "Expected looked_up_object_stores to return the singular v2.5.1 lookup result"
+  }
+
+  assert {
+    condition     = output.object_stores["lab"].cluster_ext_id == "00000000-0000-0000-0000-000000000000"
+    error_message = "Expected cluster-by-name lookup to resolve mock-cluster ext_id"
+  }
+}

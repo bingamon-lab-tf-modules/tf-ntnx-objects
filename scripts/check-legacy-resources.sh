@@ -10,6 +10,10 @@ DATA_ALLOW='^nutanix_(ndb_|karbon_|foundation_|self_service_|blueprint_|recovery
 
 resource_violations=$(grep -rhoE '^\s*resource\s+"nutanix_[a-z0-9_]+"' \
 	--include='*.tf' \
+	--exclude-dir='.devenv' \
+	--exclude-dir='.direnv' \
+	--exclude-dir='.git' \
+	--exclude-dir='.tars' \
 	--exclude-dir='.terraform' \
 	. 2>/dev/null |
 	sed -E 's/.*resource\s+"([a-z0-9_]+)".*/\1/' |
@@ -19,6 +23,10 @@ resource_violations=$(grep -rhoE '^\s*resource\s+"nutanix_[a-z0-9_]+"' \
 
 data_violations=$(grep -rhoE '^\s*data\s+"nutanix_[a-z0-9_]+"' \
 	--include='*.tf' \
+	--exclude-dir='.devenv' \
+	--exclude-dir='.direnv' \
+	--exclude-dir='.git' \
+	--exclude-dir='.tars' \
 	--exclude-dir='.terraform' \
 	. 2>/dev/null |
 	sed -E 's/.*data\s+"([a-z0-9_]+)".*/\1/' |
