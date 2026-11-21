@@ -74,7 +74,7 @@ jobs:
 
       - id: free_disk_space
         name: Free Disk Space
-        uses: tars-cloud/actions/composite/free-disk-space@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
+        uses: tars-cloud/actions/composite/free-disk-space@253eb09c3b4249a2f4adb70f8a6e87203129e4e2 # v3.15.0
         with:
           android: "true"
           dotnet: "true"
@@ -84,7 +84,7 @@ jobs:
 
       - id: set_up_consumer
         name: Set Up Consumer
-        uses: tars-cloud/actions/composite/setup-consumer@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
+        uses: tars-cloud/actions/composite/setup-consumer@253eb09c3b4249a2f4adb70f8a6e87203129e4e2 # v3.15.0
         with:
           debug: "false"
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || '' }}
@@ -96,7 +96,7 @@ jobs:
 
       - id: opentofu_checks
         name: OpenTofu Module Checks
-        uses: tars-cloud/actions/composite/run-devenv@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
+        uses: tars-cloud/actions/composite/run-devenv@253eb09c3b4249a2f4adb70f8a6e87203129e4e2 # v3.15.0
         with:
           system: x86_64-linux
           github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
@@ -187,7 +187,7 @@ jobs:
       - id: report_opentofu_status
         name: Report OpenTofu Module Status
         if: always() && !cancelled()
-        uses: tars-cloud/actions/composite/report-status@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
+        uses: tars-cloud/actions/composite/report-status@253eb09c3b4249a2f4adb70f8a6e87203129e4e2 # v3.15.0
         with:
           title: OpenTofu Module (Test)
           results: |
@@ -226,7 +226,7 @@ jobs:
 
       - id: free_disk_space
         name: Free Disk Space
-        uses: tars-cloud/actions/composite/free-disk-space@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
+        uses: tars-cloud/actions/composite/free-disk-space@253eb09c3b4249a2f4adb70f8a6e87203129e4e2 # v3.15.0
         with:
           android: "true"
           dotnet: "true"
@@ -236,7 +236,7 @@ jobs:
 
       - id: set_up_consumer
         name: Set Up Consumer
-        uses: tars-cloud/actions/composite/setup-consumer@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
+        uses: tars-cloud/actions/composite/setup-consumer@253eb09c3b4249a2f4adb70f8a6e87203129e4e2 # v3.15.0
         with:
           debug: "false"
           ref: ${{ github.event.release.tag_name }}
@@ -258,7 +258,7 @@ jobs:
 
       - id: create_package
         name: Create Module Package
-        uses: tars-cloud/actions/composite/run-devenv@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
+        uses: tars-cloud/actions/composite/run-devenv@253eb09c3b4249a2f4adb70f8a6e87203129e4e2 # v3.15.0
         with:
           system: x86_64-linux
           github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
@@ -275,7 +275,7 @@ jobs:
       - id: publish_artifactory
         name: Publish to Artifactory
         if: vars.ARTIFACTORY_URL != '' && steps.create_package.outcome == 'success'
-        uses: tars-cloud/actions/composite/run-devenv@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
+        uses: tars-cloud/actions/composite/run-devenv@253eb09c3b4249a2f4adb70f8a6e87203129e4e2 # v3.15.0
         env:
           ARTIFACTORY_URL: ${{ vars.ARTIFACTORY_URL }}
           ARTIFACTORY_TOKEN: ${{ secrets.ARTIFACTORY_TOKEN }}
@@ -296,7 +296,7 @@ jobs:
       - id: report_publish_status
         name: Report Publish Status
         if: always() && !cancelled()
-        uses: tars-cloud/actions/composite/report-status@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
+        uses: tars-cloud/actions/composite/report-status@253eb09c3b4249a2f4adb70f8a6e87203129e4e2 # v3.15.0
         with:
           title: OpenTofu Module (Publish)
           results: |

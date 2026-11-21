@@ -32,7 +32,7 @@ jobs:
   # -------------------------------------------------
   trivy:
     name: Trivy Scan
-    uses: tars-cloud/actions/.github/workflows/consumer-trivy.yaml@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
+    uses: tars-cloud/actions/.github/workflows/consumer-trivy.yaml@253eb09c3b4249a2f4adb70f8a6e87203129e4e2 # v3.15.0
     with:
       debug: false
       runs-on: >-
@@ -64,7 +64,7 @@ jobs:
   # -------------------------------------------------
   codeql:
     name: CodeQL Analysis
-    uses: tars-cloud/actions/.github/workflows/consumer-codeql.yaml@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
+    uses: tars-cloud/actions/.github/workflows/consumer-codeql.yaml@253eb09c3b4249a2f4adb70f8a6e87203129e4e2 # v3.15.0
     with:
       debug: false
       runs-on: >-
