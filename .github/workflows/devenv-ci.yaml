@@ -1,5 +1,5 @@
 ---
-name: "Consumer: Devenv CI"
+name: Devenv CI
 
 # prettier-ignore
 on:  # yamllint disable-line rule:truthy
@@ -25,25 +25,18 @@ permissions:
 
 jobs:
   # -------------------------------------------------
-  # Consumer CI
+  # Devenv CI
   # -------------------------------------------------
   ci:
-    name: Consumer CI - AMD64
-    uses: tars-cloud/actions/.github/workflows/consumer-devenv-ci.yaml@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
+    name: Devenv CI - AMD64
+    uses: tars-cloud/actions/.github/workflows/devenv-ci.yaml@e237e0ca8fbf31df927e9418d6b94dd81a462a35 # v4.0.0
     with:
-      debug: false
       runs-on: >-
         ${{ (github.actor == 'dependabot[bot]' || github.event.pull_request.user.login == 'dependabot[bot]') &&
         '"ubuntu-24.04"' || '' }}
       runner-architecture: AMD64
       job-name: Devenv CI - AMD64
-      type: devenv
       timeout-minutes: 120
       submodules: true
       cache-tools: none
       lint-command: prek run --all-files --show-diff-on-failure
-      cleanup-android: true
-      cleanup-dotnet: true
-      cleanup-haskell: true
-      cleanup-boost: true
-      cleanup-swift: true

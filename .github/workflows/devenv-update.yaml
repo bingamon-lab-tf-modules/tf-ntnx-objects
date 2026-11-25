@@ -1,5 +1,5 @@
 ---
-name: "Consumer: Devenv Update"
+name: Devenv Update
 
 # prettier-ignore
 on:  # yamllint disable-line rule:truthy
@@ -25,18 +25,11 @@ jobs:
   # -------------------------------------------------
   update:
     name: Update Devenv Dependencies
-    uses: tars-cloud/actions/.github/workflows/consumer-devenv-update.yaml@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
+    uses: tars-cloud/actions/.github/workflows/devenv-update.yaml@e237e0ca8fbf31df927e9418d6b94dd81a462a35 # v4.0.0
     with:
-      debug: false
       runner-architecture: AMD64
-      type: devenv
       timeout-minutes: 120
       submodules: true
-      cleanup-android: true
-      cleanup-dotnet: true
-      cleanup-haskell: true
-      cleanup-boost: true
-      cleanup-swift: true
       branch: update-devenv-lock
       title: "chore: Update devenv.lock"
       labels: dependencies,semver none
@@ -45,5 +38,4 @@ jobs:
       dry-run: ${{ inputs.dry_run || false }}
     secrets:
       client-id: ${{ secrets.CI_APP_CLIENT_ID }}
-      app-id: ${{ secrets.CI_APP_ID }}
       app-private-key: ${{ secrets.CI_APP_PRIVATE_KEY }}

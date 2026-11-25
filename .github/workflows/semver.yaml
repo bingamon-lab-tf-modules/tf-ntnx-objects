@@ -1,5 +1,5 @@
 ---
-name: "Consumer: Semantic Versioning"
+name: Semantic Versioning
 
 # prettier-ignore
 on:  # yamllint disable-line rule:truthy
@@ -425,21 +425,13 @@ jobs:
 
       - id: free_disk_space
         name: Free Disk Space
-        uses: tars-cloud/actions/composite/free-disk-space@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
-        with:
-          android: "true"
-          dotnet: "true"
-          haskell: "true"
-          boost: "true"
-          swift: "true"
+        uses: tars-cloud/actions/composite/free-disk-space@e237e0ca8fbf31df927e9418d6b94dd81a462a35 # v4.0.0
 
-      - id: set_up_consumer
-        name: Set Up Consumer
-        uses: tars-cloud/actions/composite/setup-consumer@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
+      - id: set_up_project
+        name: Set Up the Project
+        uses: tars-cloud/actions/composite/setup-project@e237e0ca8fbf31df927e9418d6b94dd81a462a35 # v4.0.0
         with:
-          debug: "false"
           fetch-depth: "0"
-          lfs: "false"
           submodules: recursive
           tools: none
           system: x86_64-linux
@@ -451,10 +443,10 @@ jobs:
           (github.event.inputs.changelog_tool == 'convco') ||
           (github.event.inputs.changelog_tool == null && vars.SEMVER_CHANGELOG_TOOL == 'convco') ||
           (github.event.inputs.changelog_tool == null && vars.SEMVER_CHANGELOG_TOOL == null && env.SEMVER_CHANGELOG_TOOL == 'convco')
-        uses: tars-cloud/actions/composite/run-devenv@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
+        uses: tars-cloud/actions/composite/run-devenv@e237e0ca8fbf31df927e9418d6b94dd81a462a35 # v4.0.0
         with:
           system: x86_64-linux
-          github-token: ${{ steps.set_up_consumer.outputs.dependency-token }}
+          github-token: ${{ steps.set_up_project.outputs.dependency-token }}
           run: |
             echo "📝 Generating changelog..."
 
@@ -695,7 +687,7 @@ jobs:
       - id: report_status
         name: Report Semantic Versioning Status
         if: always() && !cancelled()
-        uses: tars-cloud/actions/composite/report-status@68bf7f5eb020c47825bd5510eee164ef11fbcf9d # v3.14.0
+        uses: tars-cloud/actions/composite/report-status@e237e0ca8fbf31df927e9418d6b94dd81a462a35 # v4.0.0
         with:
           title: Semantic Versioning
           results: |
